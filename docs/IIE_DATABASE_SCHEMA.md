@@ -1,6 +1,6 @@
 # IIE Database Schema
 
-**Engine:** PostgreSQL 16 · **Status:** Phase 1 tables implemented · **Source of truth:** `apps/api/src/db/schema.ts`
+**Engine:** PostgreSQL 16 · **Status:** Phase 1 and 2 tables implemented · **Source of truth:** `apps/api/src/db/schema.ts`
 (Drizzle) and the SQL migrations in `apps/api/drizzle/`.
 
 ## Rules
@@ -10,7 +10,7 @@
 - Status columns are `varchar` with `CHECK` constraints (easier to evolve than Postgres enums).
 - All timestamps are `timestamptz`.
 - Money (from Phase 2): `bigint` minor units plus a `char(3)` currency code. No floating point.
-- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`. From Phase 3: `transaction_events`, `payment_events`, `ledger_entries`.
+- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`. From Phase 3: `transaction_events`, `payment_events`, `ledger_entries`.
 - Secrets are never stored raw: session tokens and one-time tokens are SHA-256 hashes; TOTP secrets are AES-256-GCM encrypted; passwords are argon2id.
 - Schema changes: edit `schema.ts`, run `pnpm --filter @iie/api db:generate`, review the SQL, commit both. CI fails if they drift (`drizzle-kit check`).
 
@@ -53,6 +53,27 @@
 | `audit_logs` | **Append-only.** Who did what, before/after, from where | `actor_user_id`, `actor_roles[]`, `action`, `entity_type`, `entity_id`, `before`/`after` JSONB, `ip`, `user_agent`, `session_id`, `request_id`; indexes on (entity) and (actor) |
 | `outbox_events` | Transactional outbox; events written with the change, delivered by the worker with retries | `type`, `payload` (one-time tokens removed after delivery), `available_at`, `processed_at`, `attempts`, `last_error` (prefixed `DEAD:` after 10 attempts) |
 
+## Phase 2 tables (marketplace)
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `seller_profiles` (new columns) | Pilot payout confirmation | `payout_setup_confirmed_at`, `payout_setup_confirmed_by` FK, `payout_setup_note` |
+| `seller_storefronts` | Public store, created on approval | `seller_profile_id` UQ FK, `slug` UQ, `display_name`, `description`, `logo_media_id` FK, `shipping_origin`, `return_policy`, `store_policies` |
+| `media_assets` | Uploaded images (stored via the StorageProvider) | `owner_user_id` FK, `kind` CHECK (PRODUCT_IMAGE, STORE_LOGO), `storage_key` UQ, `content_type`, `width`, `height`, `bytes` |
+| `categories` | Category tree | `parent_id` FK → categories (not self), `slug` UQ, `active`, `sort_order` |
+| `hs_codes` | Informational HS headings | `code` PK, `description` |
+| `products` | Listings | `seller_profile_id` FK, `category_id` FK, `country_of_origin_id` FK, `hs_code`, weight and dimensions (g, mm), `attributes` JSONB, `status` CHECK, review fields, `published_at`, `search_vector` (generated tsvector, GIN index) + trigram index on `title` |
+| `product_variants` | Sellable options | `product_id` FK, UQ(`seller_profile_id`, `sku`), `price_minor` bigint CHECK > 0, `currency_code` FK, `archived` |
+| `inventory` | Stock per variant | PK `variant_id`, `quantity_on_hand` ≥ 0, `quantity_reserved` (≤ on hand; used from Phase 3) |
+| `inventory_movements` | **Append-only** stock ledger | `variant_id` FK, `delta`, `quantity_after`, `reason` CHECK (INITIAL, STOCK_COUNT, SALE, RETURN, CORRECTION), `actor_user_id` |
+| `product_images` | Ordered product photos | `product_id` FK, `media_id` UQ FK, `alt_text`, `sort_order` |
+| `carts`, `cart_items` | One cart per buyer; quantities only (prices always read live) | `carts.user_id` UQ; UQ(`cart_id`, `variant_id`), quantity 1–99 |
+| `saved_products`, `saved_sellers` | Buyer favourites | composite PKs |
+
+**Public visibility** is one rule, used by search, product pages, images and the cart
+(`apps/api/src/catalog/visibility.ts`): product `ACTIVE` or `OUT_OF_STOCK`, seller `ACTIVE`, seller's account
+`ACTIVE`, storefront present, seller's country marketplace open.
+
 ## Relationship overview
 
 ```
@@ -67,8 +88,8 @@ users 1─N audit_logs (as actor)
 ## Planned tables (later phases)
 
 Designed in [`IIE_PLATFORM_ARCHITECTURE.md` §7](./IIE_PLATFORM_ARCHITECTURE.md#7-data-model-core-entities):
-categories, products, product_variants, inventory, product_images, hs_codes, restricted_product_rules (Phase 2/6);
-carts, cart_items, checkout_groups, orders, order_items, transactions, transaction_events, notifications (Phase 3);
+restricted_product_rules (Phase 6); checkout_groups, quotes, orders, order_items, transactions, transaction_events,
+inventory reservations, notifications (Phase 3);
 payment_intents, payment_events, refunds, payouts, payout_accounts, ledger_entries, exchange_rates, provider_webhooks (Phase 4);
 logistics_partners, shipments, shipment_events, customs_documents (Phase 5);
 compliance_checks, kyc_verifications, disputes, dispute_evidence (Phase 6); messages, reviews (Phase 7).

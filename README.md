@@ -2,10 +2,13 @@
 
 A secure digital marketplace and trade platform connecting buyers and sellers across CARICOM.
 
-**Status:** Phase 1 (core foundation) complete: registration, email verification, login with optional
-two-step verification, password reset, roles and permissions, buyer and seller onboarding, the country
-engine (10 countries configured; St. Lucia and St. Vincent and the Grenadines open), admin tools and an
-append-only audit log. Phase 2 (marketplace) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+**Status:** Phases 1–2 complete.
+- **Phase 1 (core foundation):** registration, email verification, login with optional two-step verification,
+  roles and permissions, onboarding, the country engine, admin tools and an append-only audit log.
+- **Phase 2 (marketplace):** seller approval, storefronts, product listings with IIE review, photos, stock, search,
+  cart, saved items and addresses.
+
+Phase 3 (checkout and the central transaction engine) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
 
 ## Repository layout
 
@@ -47,9 +50,11 @@ from there. To send real email through Gmail, see `.env.example` and [`docs/IIE_
 pnpm typecheck
 pnpm test        # needs Postgres; resets the database named in TEST_DATABASE_URL (must end in _test)
 pnpm build
+pnpm e2e         # browser test of the pilot flow; needs Postgres database iie_e2e and a prior build
 ```
 
-CI runs the same steps plus a migration drift check and a dependency audit (`.github/workflows/ci.yml`).
+CI runs the same steps plus a migration drift check, a dependency audit and the end-to-end test
+(`.github/workflows/ci.yml`).
 
 ## Documentation
 
@@ -57,7 +62,7 @@ CI runs the same steps plus a migration drift check and a dependency audit (`.gi
 |---|---|
 | [`IIE_PLATFORM_AUDIT.md`](docs/IIE_PLATFORM_AUDIT.md) | Phase 0 audit and minimum scope for the St. Lucia → St. Vincent pilot |
 | [`IIE_PLATFORM_ARCHITECTURE.md`](docs/IIE_PLATFORM_ARCHITECTURE.md) | Production architecture and open decisions |
-| [`IIE_DEVELOPMENT_ROADMAP.md`](docs/IIE_DEVELOPMENT_ROADMAP.md) | Phase status, Phase 1 result, Phase 2 plan |
+| [`IIE_DEVELOPMENT_ROADMAP.md`](docs/IIE_DEVELOPMENT_ROADMAP.md) | Phase status, results of each phase, Phase 3 plan |
 | [`IIE_DATABASE_SCHEMA.md`](docs/IIE_DATABASE_SCHEMA.md) | Tables, rules and planned entities |
 | [`IIE_API_DOCUMENTATION.md`](docs/IIE_API_DOCUMENTATION.md) | API conventions and endpoints ([`openapi.json`](docs/openapi.json)) |
 | [`IIE_COUNTRY_ENGINE.md`](docs/IIE_COUNTRY_ENGINE.md) | How countries, currencies and trade lanes are configured |

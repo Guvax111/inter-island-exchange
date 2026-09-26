@@ -17,6 +17,9 @@ code change or deployment.
 | `settings` (JSON) | `{ "public": { "tagline": "…" } }` | Configuration not yet in its own table. `settings.public` is shown on the public page; every other key is internal |
 
 **Trade lanes** (`lanes`) say which origin → destination routes are open. Pilot: St. Lucia → St. Vincent and the Grenadines.
+From Phase 2 lanes are enforced: search's "ships to" filter, the "ships to" list on product and store pages, and the cart
+(`NOT_SHIPPABLE_TO_YOU`) all use them. There is no domestic lane in the pilot, so a St. Lucia buyer cannot buy from a
+St. Lucia seller until an administrator opens LC → LC.
 
 **Transaction limits** (`verification_limits`) will cap transactions by country and buyer verification level (enforced from Phase 3).
 

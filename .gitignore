@@ -8,3 +8,7 @@ coverage
 .DS_Store
 *.tsbuildinfo
 .media/
+apps/web/e2e/.emails/
+apps/web/e2e/.media/
+apps/web/test-results/
+apps/web/playwright-report/

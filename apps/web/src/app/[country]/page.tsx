@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ProductGrid } from '@/components/marketplace/product-card';
 import { serverGet, type PublicCountry } from '@/lib/server-api';
+import type { SearchResult, SellerCard } from '@/lib/types';
 
 type Props = { params: Promise<{ country: string }> };
 
@@ -25,6 +27,10 @@ export default async function CountryPage({ params }: Props) {
   if (!country) notFound();
   const tagline = typeof country.info.tagline === 'string' ? country.info.tagline : null;
   const lanes = country.lanes ?? [];
+  const [sellers, latest] = await Promise.all([
+    serverGet<{ items: SellerCard[] }>(`/sellers?country=${country.code}`, 60),
+    serverGet<SearchResult>(`/products?sellerCountry=${country.code}&sort=newest&pageSize=8`, 60),
+  ]);
 
   return (
     <>
@@ -54,20 +60,39 @@ export default async function CountryPage({ params }: Props) {
           )}
         </div>
         <div className="rounded-lg border p-6">
-          <h2 className="text-lg font-semibold">Local sellers and products</h2>
-          <p className="mt-3 text-muted-foreground">
-            Seller storefronts and product listings open in the next release. {country.marketplaceEnabled && 'Sellers can apply now.'}
-          </p>
+          <h2 className="text-lg font-semibold">Local sellers</h2>
+          {sellers?.items.length ? (
+            <ul className="mt-3 space-y-2">
+              {sellers.items.map((s) => (
+                <li key={s.slug}>
+                  <Link href={`/seller/${s.slug}`} className="text-ocean-700 underline">
+                    {s.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-muted-foreground">No sellers from {country.name} are live yet.</p>
+          )}
           {country.marketplaceEnabled && (
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button asChild>
+              <Button asChild size="sm">
                 <Link href="/signup?type=SELLER">Become a Seller</Link>
               </Button>
-              <Button asChild variant="outline">
+              <Button asChild size="sm" variant="outline">
                 <Link href="/signup?type=BUYER">Register as a Buyer</Link>
               </Button>
             </div>
           )}
+        </div>
+        <div className="md:col-span-2">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold">Products from {country.name}</h2>
+            <Link href={`/marketplace?sellerCountry=${country.code}`} className="text-sm text-ocean-700 underline">
+              See all
+            </Link>
+          </div>
+          <ProductGrid products={latest?.items ?? []} empty={`No products from ${country.name} are listed yet.`} />
         </div>
         <div className="rounded-lg border p-6 md:col-span-2">
           <h2 className="text-lg font-semibold">Shipping and logistics partners</h2>

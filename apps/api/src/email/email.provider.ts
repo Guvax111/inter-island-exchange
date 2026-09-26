@@ -1,4 +1,6 @@
 import { Logger } from '@nestjs/common';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import nodemailer, { Transporter } from 'nodemailer';
 import type { AppConfig } from '../config/config';
 
@@ -23,11 +25,23 @@ export class SandboxEmailProvider implements EmailProvider {
   readonly sent: EmailMessage[] = [];
   private readonly logger = new Logger('SandboxEmail');
 
-  constructor(private readonly echo: boolean) {}
+  /**
+   * @param echo print messages to the log
+   * @param dir  also write each message as a JSON file (used by the end-to-end tests and handy locally)
+   */
+  constructor(
+    private readonly echo: boolean,
+    private readonly dir?: string,
+  ) {}
 
   async send(message: EmailMessage): Promise<void> {
     this.sent.push(message);
     if (this.echo) this.logger.log(`To: ${message.to}\nSubject: ${message.subject}\n\n${message.text}`);
+    if (this.dir) {
+      await mkdir(this.dir, { recursive: true });
+      const name = `${Date.now()}-${message.to.replace(/[^a-z0-9@._+-]/gi, '_')}.json`;
+      await writeFile(path.join(this.dir, name), JSON.stringify(message, null, 2));
+    }
   }
 }
 
@@ -51,5 +65,5 @@ export class SmtpEmailProvider implements EmailProvider {
 }
 
 export function createEmailProvider(config: AppConfig): EmailProvider {
-  return config.EMAIL_PROVIDER === 'smtp' ? new SmtpEmailProvider(config) : new SandboxEmailProvider(config.APP_ENV === 'local');
+  return config.EMAIL_PROVIDER === 'smtp' ? new SmtpEmailProvider(config) : new SandboxEmailProvider(config.APP_ENV === 'local', config.EMAIL_SANDBOX_DIR);
 }

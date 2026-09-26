@@ -10,7 +10,7 @@ export interface NavItem {
 
 export const PRIMARY_NAV: NavItem[] = [
   { label: 'Home', href: '/', status: 'live' },
-  { label: 'Marketplace', href: '/marketplace', status: 'coming-soon' },
+  { label: 'Marketplace', href: '/marketplace', status: 'live' },
   { label: 'How It Works', href: '/how-it-works', status: 'live' },
   { label: 'Buy', href: '/buy', status: 'live' },
   { label: 'Sell', href: '/sell', status: 'live' },
@@ -24,7 +24,6 @@ export const PRIMARY_NAV: NavItem[] = [
 ];
 
 export const COMING_SOON: Record<string, { title: string; phase: string; summary: string }> = {
-  marketplace: { title: 'Marketplace', phase: 'Phase 2', summary: 'Browse and search products from verified sellers across CARICOM.' },
   logistics: { title: 'Logistics', phase: 'Phase 5', summary: 'Pickup, regional shipping and last-mile delivery through IIE logistics partners.' },
   'business-solutions': { title: 'Business Solutions', phase: 'Phase 7', summary: 'Tools for business buyers and sellers trading at volume.' },
   help: { title: 'Help Center', phase: 'Phase 7', summary: 'Guides and answers for buyers, sellers and partners.' },

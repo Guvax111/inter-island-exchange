@@ -3,7 +3,7 @@ import { Globe2, PackageSearch, ShieldCheck, ShoppingBag, Store, Truck } from 'l
 import { Button } from '@/components/ui/button';
 
 const ctas = [
-  { href: '/marketplace', label: 'Shop the Marketplace', icon: ShoppingBag, soon: true },
+  { href: '/marketplace', label: 'Shop the Marketplace', icon: ShoppingBag },
   { href: '/signup?type=SELLER', label: 'Become a Seller', icon: Store },
   { href: '/signup?type=BUYER', label: 'Register as a Buyer', icon: PackageSearch },
   { href: '/countries', label: 'Explore Countries', icon: Globe2 },

@@ -42,6 +42,9 @@ export default function AccountPage() {
                   <p>Roles: {me.roles.map((r) => ROLE_LABELS[r] ?? r.replace(/_/g, ' ')).join(', ')}</p>
                   <p>Currency: {me.user.country.currency.code}</p>
                   {me.buyerProfile && <p>Buyer level: {me.buyerProfile.verificationLevel.toLowerCase()}</p>}
+                  {me.buyerProfile && (
+                    <a href="/dashboard/buyer" className="font-medium text-ocean-700 underline">Open buyer dashboard</a>
+                  )}
                 </CardContent>
               </Card>
               {me.sellerProfile && (
@@ -55,7 +58,7 @@ export default function AccountPage() {
                     <p>
                       Status: <Badge variant="secondary">{STATUS_LABELS[me.sellerProfile.status] ?? me.sellerProfile.status}</Badge>
                     </p>
-                    <p className="text-muted-foreground">Storefronts and product listings open in the next release.</p>
+                    <a href="/dashboard/seller" className="font-medium text-ocean-700 underline">Open seller dashboard</a>
                   </CardContent>
                 </Card>
               )}

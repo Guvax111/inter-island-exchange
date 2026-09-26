@@ -21,6 +21,8 @@ const envSchema = z
     MFA_ENCRYPTION_KEY: z.string().refine((v) => Buffer.from(v, 'base64').length === 32, 'Must be 32 bytes, base64-encoded'),
     EMAIL_PROVIDER: z.enum(['sandbox', 'smtp']).default('sandbox'),
     EMAIL_FROM: z.string().min(3),
+    /** Sandbox only: also write each email to this folder as JSON. */
+    EMAIL_SANDBOX_DIR: z.string().optional(),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().int().optional(),
     SMTP_SECURE: bool.default(true),

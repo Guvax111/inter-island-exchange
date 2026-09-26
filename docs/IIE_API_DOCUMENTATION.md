@@ -1,6 +1,6 @@
 # IIE API Documentation
 
-**Version:** v1 (base path `/api/v1`) · **Status:** Phase 1
+**Version:** v1 (base path `/api/v1`) · **Status:** Phases 1–2
 
 The machine-readable specification is [`openapi.json`](./openapi.json), generated from the code with
 `pnpm --filter @iie/api build && pnpm --filter @iie/api openapi`. In non-production environments the
@@ -11,7 +11,7 @@ API also serves interactive docs at `/api/v1/docs`. Regenerate the spec whenever
 | Topic | Rule |
 |---|---|
 | Versioning | Breaking changes go to `/api/v2`; v1 keeps working until retired with notice |
-| Format | JSON in and out. Money is always `{ amountMinor: string, currency: "XCD" }` (from Phase 2) |
+| Format | JSON in and out; image uploads are `multipart/form-data` with a `file` field. Money in responses is `{ amountMinor: "4500", currency: "XCD", formatted: "EC$45.00" }`; sellers send prices as decimal strings (`"45.00"`) |
 | Authentication | httpOnly `iie_session` cookie set by `POST /auth/login`. The browser reaches the API through the web app's same-origin `/api/v1` proxy |
 | CSRF | Every state-changing request made with a session must send `X-CSRF-Token` equal to the `iie_csrf` cookie (also returned by login and `GET /me`). The server compares it with the value stored on the session |
 | Origin | State-changing requests with an `Origin` header outside `ALLOWED_ORIGINS` are refused |
@@ -80,6 +80,67 @@ Permission column: `public` = no session; otherwise the permission required (see
 | POST | `/admin/countries` | `country.manage` (global) | Adds a country (closed by default) |
 | PATCH | `/admin/countries/{ISO2}` | `country.manage` in that country | Opening/closing and identifiers (`marketplaceEnabled`, `iieCode`, `slug`, `currencyCode`) need global scope |
 | GET/PUT | `/admin/lanes` | `country.manage` (global for PUT) | `{ origin, destination, enabled }` |
+
+## Endpoints (Phase 2 — marketplace)
+
+### Public marketplace
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/products` | Search. `q` (every word must match, prefix and stemmed), `category` (includes sub-categories), `seller` (store slug), `sellerCountry`, `countryOfOrigin`, `destination` (only sellers with an open lane to it), `currency`, `minPrice`/`maxPrice` (decimal), `inStock=true`, `sort` (`relevance`, `newest`, `price_asc`, `price_desc`), `page`, `pageSize` ≤ 48 |
+| GET | `/products/{id}` | Public product page data. Hidden products (draft, in review, suspended, archived, seller not active) are `404` |
+| GET | `/sellers?country=LC` | Active sellers |
+| GET | `/sellers/{slug}` | Storefront: profile, policies, categories, destinations shipped to |
+| GET | `/categories` | Active category tree |
+| GET | `/media/{id}` | Image bytes. Public images are cacheable; images of products not yet public are visible only to their owner and reviewers |
+
+### Seller (permission `product.manage.own`)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/me/seller` | Seller profile, storefront, product counts, review notes when returned |
+| PATCH | `/me/seller/profile` | Only while the application is returned for changes (`DRAFT`) |
+| POST | `/me/seller/resubmit` | `DRAFT` → `UNDER_REVIEW` |
+| PATCH | `/me/storefront` | `slug`, `displayName`, `description`, `shippingOrigin`, `returnPolicy`, `storePolicies`. `409 SLUG_TAKEN` |
+| POST | `/me/storefront/logo` | multipart `file` |
+| GET/POST | `/me/products` | List / create (draft) with at least one variant `{ sku, name, price, quantity }` |
+| GET/PATCH | `/me/products/{id}` | Content edits to a live product send it back to review; weight, dimensions, prices and stock do not |
+| POST | `/me/products/{id}/variants` | Add an option |
+| PATCH | `/me/products/{id}/variants/{variantId}` | `{ name?, price? }` |
+| PUT | `/me/products/{id}/variants/{variantId}/stock` | Stock count `{ quantity, note? }`; recorded in the stock ledger |
+| POST | `/me/products/{id}/images` | multipart `file`, `altText?`; up to 8 |
+| POST | `/me/products/{id}/images/{imageId}/delete` | |
+| POST | `/me/products/{id}/submit` | Requires photo, HS code, weight, dimensions, description (`400 PRODUCT_INCOMPLETE` lists what is missing) |
+| POST | `/me/products/{id}/archive` · `/restore` | |
+
+### Buyer
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/me/cart` | `cart.manage.own` | Lines grouped by seller with live prices, per-line `issues` (`UNAVAILABLE`, `NOT_SHIPPABLE_TO_YOU`, `INSUFFICIENT_STOCK`), subtotals |
+| POST | `/me/cart/items` | `cart.manage.own` + active account | `{ variantId, quantity }`; adds to an existing line. Errors: `INSUFFICIENT_STOCK`, `NOT_SHIPPABLE_TO_YOU`, `OWN_PRODUCT` |
+| PATCH/DELETE | `/me/cart/items/{variantId}` | same | Change quantity / remove |
+| DELETE | `/me/cart` | `cart.manage.own` | Empty the cart |
+| GET/PUT/DELETE | `/me/saved/products[/{id}]` | `saved.manage.own` | |
+| GET/PUT/DELETE | `/me/saved/sellers[/{slug}]` | `saved.manage.own` | |
+| GET/POST | `/me/addresses` | `profile.read.own` / `profile.update.own` | Delivery addresses must be in the registered country |
+| POST | `/me/addresses/{id}/default` · DELETE `/me/addresses/{id}` | `profile.update.own` | The default address cannot be deleted |
+
+### Administration
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/admin/sellers?status=` | `seller.review` (country-scoped) | Review queue |
+| GET | `/admin/sellers/{id}` | `seller.review` | Applicant, business details, storefront |
+| POST | `/admin/sellers/{id}/review` | `seller.review` | `{ decision: APPROVE\|REJECT\|REQUEST_CHANGES, notes }` (notes required unless approving). Not on your own application |
+| POST | `/admin/sellers/{id}/payout-setup` | `seller.review` | Pilot: `{ note }` records how payouts were arranged; `APPROVED` → `ACTIVE` |
+| POST | `/admin/sellers/{id}/suspend` · `/reinstate` | `seller.review` | `{ reason }`; hides the store and all its products |
+| GET | `/admin/products?status=` | `product.review` (country-scoped) | Review queue |
+| GET | `/admin/products/{id}` | `product.review` | |
+| POST | `/admin/products/{id}/review` | `product.review` | As for sellers; approval makes it public (or out of stock) |
+| POST | `/admin/products/{id}/suspend` · `/reinstate` | `product.review` | `{ reason }` |
+| GET/POST | `/admin/categories` | `category.manage` | `{ name, slug, parentSlug?, sortOrder? }` |
+| PATCH | `/admin/categories/{slug}` | `category.manage` | `{ name?, sortOrder?, active? }` |
 
 ### Health
 

@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/admin/users', label: 'Users', permission: 'user.read.any' },
+  { href: '/admin/sellers', label: 'Sellers', permission: 'seller.review' },
+  { href: '/admin/products', label: 'Products', permission: 'product.review' },
+  { href: '/admin/categories', label: 'Categories', permission: 'category.manage' },
   { href: '/admin/countries', label: 'Countries', permission: 'country.manage' },
   { href: '/admin/audit', label: 'Audit log', permission: 'audit.read' },
 ];

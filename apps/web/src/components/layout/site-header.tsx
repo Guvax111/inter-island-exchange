@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, ShoppingCart, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { PRIMARY_NAV } from '@/lib/navigation';
@@ -18,7 +18,9 @@ export function SiteHeader() {
   const refresh = useRefreshMe();
   useEffect(() => setOpen(false), [pathname]);
 
-  const isAdmin = me?.permissions.includes('user.read.any') || me?.permissions.includes('country.manage');
+  const ADMIN_PERMISSIONS = ['user.read.any', 'country.manage', 'seller.review', 'product.review'];
+  const isAdmin = ADMIN_PERMISSIONS.some((p) => me?.permissions.includes(p));
+  const dashboard = me?.roles.includes('seller') ? '/dashboard/seller' : me?.roles.includes('buyer') ? '/dashboard/buyer' : null;
 
   async function logout() {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -28,6 +30,18 @@ export function SiteHeader() {
 
   const account = me ? (
     <>
+      {me.roles.includes('buyer') && (
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/cart" aria-label="Cart">
+            <ShoppingCart className="h-4 w-4" aria-hidden /> Cart
+          </Link>
+        </Button>
+      )}
+      {dashboard && (
+        <Button asChild variant="ghost" size="sm">
+          <Link href={dashboard}>Dashboard</Link>
+        </Button>
+      )}
       {isAdmin && (
         <Button asChild variant="ghost" size="sm">
           <Link href="/admin">Admin</Link>
@@ -56,15 +70,15 @@ export function SiteHeader() {
       <div className="container flex h-16 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2" aria-label="Inter-Island Exchange home">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ocean-700 text-sm font-bold text-white">IIE</span>
-          <span className="hidden font-semibold text-ocean-900 sm:inline">Inter-Island Exchange</span>
+          <span className="hidden whitespace-nowrap font-semibold text-ocean-900 sm:inline">Inter-Island Exchange</span>
         </Link>
-        <nav className="hidden items-center gap-1 xl:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-1 2xl:flex" aria-label="Primary">
           {PRIMARY_NAV.filter((n) => n.href !== '/').map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'rounded-md px-2 py-1 text-sm text-slate-700 hover:bg-muted hover:text-ocean-800',
+                'whitespace-nowrap rounded-md px-2 py-1 text-sm text-slate-700 hover:bg-muted hover:text-ocean-800',
                 pathname === item.href && 'font-semibold text-ocean-800',
               )}
             >
@@ -72,9 +86,9 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <div className="hidden items-center gap-2 xl:flex">{account}</div>
+        <div className="hidden items-center gap-2 2xl:flex">{account}</div>
         <button
-          className="rounded-md p-2 xl:hidden"
+          className="rounded-md p-2 2xl:hidden"
           aria-label={open ? 'Close menu' : 'Open menu'}
           aria-expanded={open}
           aria-controls="mobile-nav"
@@ -84,7 +98,7 @@ export function SiteHeader() {
         </button>
       </div>
       {open && (
-        <nav id="mobile-nav" className="border-t bg-white xl:hidden" aria-label="Primary">
+        <nav id="mobile-nav" className="border-t bg-white 2xl:hidden" aria-label="Primary">
           <ul className="container grid gap-1 py-3">
             {PRIMARY_NAV.map((item) => (
               <li key={item.href}>

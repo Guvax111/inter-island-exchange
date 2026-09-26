@@ -7,7 +7,7 @@ export const metadata = { title: 'How It Works' };
 const steps: { title: string; text: string; live: boolean }[] = [
   { title: 'Register and verify', text: 'Create a buyer or seller account in your country and confirm your email.', live: true },
   { title: 'Seller review', text: 'IIE reviews each seller before they can open a storefront.', live: true },
-  { title: 'List and discover products', text: 'Sellers list products; buyers search across CARICOM.', live: false },
+  { title: 'List and discover products', text: 'Sellers list products after IIE review; buyers search across CARICOM and fill a cart.', live: true },
   { title: 'Checkout', text: 'See product cost, shipping, duties and taxes, and fees before you pay.', live: false },
   { title: 'Payment held safely', text: 'A licensed payment partner holds the payment while your order ships.', live: false },
   { title: 'Shipping and customs', text: 'Logistics partners collect, export, clear customs and deliver. Track every step.', live: false },

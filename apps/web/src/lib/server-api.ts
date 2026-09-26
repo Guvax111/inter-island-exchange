@@ -19,6 +19,15 @@ export interface PublicCountry {
 export async function serverGet<T>(path: string, revalidateSeconds = 60): Promise<T | null> {
   const res = await fetch(`${API_ORIGIN}/api/v1${path}`, { next: { revalidate: revalidateSeconds } });
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`API ${path} returned ${res.status}`);
+  if (!res.ok) throw new ApiRequestError(path, res.status);
   return (await res.json()) as T;
+}
+
+export class ApiRequestError extends Error {
+  constructor(
+    readonly path: string,
+    readonly status: number,
+  ) {
+    super(`API ${path} returned ${status}`);
+  }
 }

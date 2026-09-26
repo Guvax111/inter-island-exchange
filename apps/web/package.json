@@ -8,7 +8,8 @@
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "echo \"web: covered by API integration tests and the browser walk-through (Playwright suite planned)\""
+    "test": "echo \"web: covered by API integration tests and the browser walk-through (Playwright suite planned)\"",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@iie/shared": "workspace:*",
@@ -28,6 +29,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/node": "^22.20.4",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",

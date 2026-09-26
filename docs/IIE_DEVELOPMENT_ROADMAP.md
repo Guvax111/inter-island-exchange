@@ -6,8 +6,8 @@
 |---|---|---|
 | 0 | Audit, architecture | **Done** |
 | 1 | Core foundation: repo, auth, roles, profiles, country engine, database | **Done** (see Phase 1 result below) |
-| 2 | Marketplace: seller approval, storefronts, products, categories, search, cart | **Planned — awaiting approval** (below) |
-| 3 | Orders and transaction engine: checkout, orders, state machine, notifications | Not started |
+| 2 | Marketplace: seller approval, storefronts, products, categories, search, cart | **Done** (see Phase 2 result below) |
+| 3 | Orders and transaction engine: checkout, orders, state machine, notifications | **Planned — awaiting approval** (below) |
 | 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | Not started |
 | 5 | Logistics: partners, shipments, tracking, delivery confirmation | Not started |
 | 6 | Compliance and disputes | Not started |
@@ -129,7 +129,7 @@ Password, and pushing this repository to GitHub.
 
 ---
 
-## Phase 2 plan — Marketplace
+## Phase 2 plan — Marketplace (approved 2026-09-26)
 
 ### What will be built
 
@@ -171,3 +171,89 @@ CRUD + submit for review, `/me/cart` CRUD, `/admin/sellers` review queue, `/admi
 | Listing restricted goods before the compliance engine (Phase 6) exists | Every product needs admin approval in Phase 2; HS code required |
 | Search quality in Postgres at pilot scale | Fine for thousands of products; abstraction allows a search engine later |
 | Staging hosting still undecided (D4) | Needed for seller UAT with real St. Lucia businesses; decide during Phase 2 |
+
+---
+
+## Phase 2 result
+
+**Delivered:** everything in the Phase 2 plan. 74 API integration tests and 6 shared unit tests pass, and a
+Playwright end-to-end test (now in CI) runs the pilot flow in a real browser: a St. Lucia seller signs up and is
+approved, IIE confirms payout setup, the seller lists diapers with a photo, IIE approves the product, and a buyer in
+St. Vincent on a phone-sized screen finds it, adds two packs to the cart and sees EC$90.00.
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| Pre-signed uploads straight to object storage | Uploads go through the API, which decodes, resizes and re-encodes every image | Guarantees only real, metadata-free images are stored; simpler for the pilot's volume. Revisit if uploads become a load problem |
+| Object storage adapter | `StorageProvider` interface with local disk only; production refuses local storage | The S3-compatible adapter depends on the hosting decision (D4) |
+| Seller rating filter in search | Not included | There are no ratings until reviews (Phase 7); no fake ratings are shown |
+| Variant archiving | Not included | Sellers set stock to 0 or archive the whole product; per-option archiving can follow |
+
+Other notes:
+
+- **Pilot pricing rule:** sellers price in their own country's currency. Buyers in St. Vincent also use XCD, so no
+  conversion is needed yet. Multi-currency pricing arrives with the FX provider (Phase 4).
+- **Lanes are enforced:** only products whose seller has an open lane to the buyer's country can go in the cart.
+- **API_ORIGIN at build time:** the web app's `/api/v1` proxy target is fixed when it is built; set `API_ORIGIN`
+  for the build as well as at runtime.
+
+---
+
+## Phase 3 plan — Orders and transaction engine
+
+### What will be built
+
+1. **Checkout configuration (admin-managed data, no code per country):**
+   - Shipping rates per trade lane, by weight band (e.g. SLU→SVG, 0–2 kg, 2–5 kg…).
+   - IIE platform fee rules (percentage and/or fixed amount, per lane or country).
+   - Duty and tax **estimates** per destination country, by HS code prefix. Where no estimate is configured the
+     buyer sees "Duties and taxes may be payable on arrival" instead of a number.
+2. **Checkout for one seller at a time** (pilot rule from Phase 2):
+   - The validation pipeline from the architecture doc: buyer active and within the limit for their verification
+     level, delivery address, seller active, lane open, product eligible, stock available.
+   - A **quote** freezing everything: product lines, shipping, fees, duty/tax estimate, total. Valid for 15 minutes.
+   - The screen shows PRODUCT COST + SHIPPING + DUTIES/TAXES + PLATFORM FEES = TOTAL.
+3. **Orders and the central transaction record:**
+   - Placing the order creates an order with price-snapshot lines and one **transaction** with the IIE ID
+     (`IIE-SLU-SVG-000001`), using one global sequence.
+   - Stock is **reserved** when the order is placed and released if payment does not arrive in time.
+4. **Transaction state machine:**
+   - All states from the brief are defined in one table (allowed transitions, who may trigger them, guards), with
+     one `transition()` function and an append-only event log.
+   - Phase 3 drives `CREATED → AWAITING_PAYMENT → CANCELLED` (buyer cancels or the payment window expires).
+     Payment states arrive in Phase 4, shipping states in Phase 5.
+5. **Notifications:** in-app notifications (bell icon, unread count) plus email, triggered by transaction events.
+   Phase 3 events: order placed, order cancelled, payment window expiring.
+6. **Screens:** checkout, buyer "My orders" with a status timeline, seller "Orders" (visible once paid, from Phase 4),
+   and admin "Transactions" showing every event.
+7. **Scheduled jobs** in the existing worker (Postgres-based, no Redis yet) for reservation expiry.
+8. **`docs/IIE_TRANSACTION_STATE_MACHINE.md`** describing every state and transition.
+
+### Database changes
+
+New tables: `lane_shipping_rates`, `fee_rules`, `duty_estimates`, `quotes`, `orders`, `order_items` (price
+snapshots), `transactions` (IIE ID, the six sub-statuses, all amounts in minor units), `transaction_events`
+(append-only), `inventory_reservations`, `notifications`. New sequence: `transaction_number_seq`.
+
+### API changes
+
+`POST /me/checkout/quote` `{ sellerSlug, addressId }` · `POST /me/checkout` `{ quoteId }` ·
+`GET /me/orders`, `GET /me/orders/{iieId}`, `POST /me/orders/{iieId}/cancel` · `GET /me/sales` ·
+`GET /me/notifications`, `POST /me/notifications/read` · `GET /admin/transactions`, `GET /admin/transactions/{iieId}` ·
+admin CRUD for shipping rates, fee rules and duty estimates.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Duty/tax figures are wrong | Shown as estimates with a clear label; configured by staff from a customs broker's guidance; can be left unconfigured |
+| Fee and shipping numbers are business decisions | Configuration, not code; values below needed before UAT |
+| Two buyers race for the last unit | Reservation inside the same database transaction with row locks; tested |
+| Orders placed but never paid tie up stock | Reservation expiry job releases stock and cancels the order |
+| No payments yet, so no end-to-end sale until Phase 4 | Phase 3 ends at "awaiting payment"; Phase 4 connects the sandbox payment provider |
+
+### Decisions requested before Phase 3 (can be placeholders for testing)
+
+- IIE platform fee for the pilot (e.g. a percentage of the product subtotal, and who pays it: buyer, seller or split).
+- SLU → SVG shipping rates by weight from the logistics partner (D5), or placeholder rates for testing.
+- Whether to show duty/tax estimates for SVG in the pilot, or only "may be payable on arrival".
+- How long a placed order holds stock while waiting for payment (suggested: 30 minutes).

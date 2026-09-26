@@ -50,3 +50,14 @@ export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.body.message;
   return 'Something went wrong. Please try again.';
 }
+
+/** Multipart upload through the same proxy, with the CSRF header. */
+export async function apiUpload<T = unknown>(path: string, file: File, fields: Record<string, string> = {}): Promise<T> {
+  const form = new FormData();
+  form.append('file', file);
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  const res = await fetch(`/api/v1${path}`, { method: 'POST', body: form, credentials: 'same-origin', headers: { 'x-csrf-token': csrfToken() } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error ?? { code: 'UPLOAD_FAILED', message: 'Upload failed. Try a smaller JPEG, PNG or WebP image.' });
+  return data as T;
+}

@@ -1,6 +1,6 @@
 # IIE Security
 
-**Status:** Phase 1 controls implemented and tested. A full review and penetration test are scheduled for Phase 8.
+**Status:** Phase 1–2 controls implemented and tested. A full review and penetration test are scheduled for Phase 8.
 
 ## Implemented in Phase 1
 
@@ -23,6 +23,18 @@
 | Errors | Uniform error body with request ID; stack traces never returned | `http-exception.filter.ts` |
 | Configuration | Validated at boot; production refuses sandbox email, insecure cookies and non-https URLs; secrets only from environment | `config/config.ts` |
 | Dependencies | `pnpm audit --prod --audit-level high` in CI; TypeScript strict everywhere | `.github/workflows/ci.yml` |
+
+## Added in Phase 2
+
+| Area | Control | Where / test |
+|---|---|---|
+| Uploads | Type decided by decoding the file (JPEG, PNG, WebP only), never by name or declared type; size limit; decompression-bomb pixel limit; every image re-encoded to WebP, resized, EXIF/GPS metadata removed; random server-generated storage keys | `media/media.service.ts`; `products.test.ts` |
+| Image privacy | Images of unpublished products and inactive stores are served only to their owner and in-scope reviewers; `Cache-Control: private, no-store` for those; `Content-Security-Policy: default-src 'none'` on image responses | `media.service.ts`; image tests |
+| Marketplace visibility | One shared rule for what the public sees; suspending a seller hides the store, its products and images immediately | `catalog/visibility.ts`; seller suspension test |
+| Review integrity | Reviewers cannot decide on their own seller application or products; reviews are country-scoped; every decision is audited with notes | `sellers.service.ts`, `products.service.ts`; tests |
+| Stock integrity | Stock changes recorded in an append-only ledger (DB trigger) | `inventory_movements`; ledger test |
+| Search | Free text is reduced to letters and digits before building the query, so it cannot inject query syntax; parameterised SQL | `marketplace/search.provider.ts`; search test |
+| Cart | Server checks visibility, stock, trade lane and own-product rules on every add; cart holds quantities only, never prices | `cart.service.ts`; cart tests |
 
 ## Secrets
 
@@ -50,5 +62,7 @@ Never commit `.env` files (`.gitignore` blocks them). `.env.example` documents e
 | `ACCOUNT_LOCKED` and `MFA_REQUIRED` reveal that an account exists or that a password was right | Accepted for usability; revisit in the Phase 8 review |
 | Phone verification (SMS) not implemented | SMS provider abstraction, Phase 3 |
 | Country-scoped audit reading | Phase 7 |
+| Object storage adapter (S3-compatible) not built; `local` disk storage is refused in production | Build with the hosting decision (D4), before staging with real sellers |
+| Image virus scanning | Images are fully decoded and re-encoded (which removes embedded payloads); add scanning when non-image documents arrive (Phase 5 customs documents) |
 | Deletion requests are recorded but processed manually | Phase 7 workflow with legal retention rules |
 | No error-monitoring service wired up | Sentry/OpenTelemetry in Phase 8 (logs include request IDs meanwhile) |

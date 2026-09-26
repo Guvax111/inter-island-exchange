@@ -23,7 +23,7 @@ export interface Me {
   permissions: string[];
   mfaEnabled: boolean;
   buyerProfile: { partyType: string; verificationLevel: string } | null;
-  sellerProfile: { id: string; partyType: string; legalName: string; category: string; status: string } | null;
+  sellerProfile: { id: string; partyType: string; legalName: string; category: string; status: string; storefrontSlug: string | null } | null;
   nextAction: NextAction;
   csrfToken: string;
 }

@@ -1,1 +1,2 @@
 CREATE DATABASE iie_test OWNER iie;
+CREATE DATABASE iie_e2e OWNER iie;
