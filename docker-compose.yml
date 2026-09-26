@@ -1,0 +1,18 @@
+# Local development services. Not used in staging/production (managed Postgres there).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: iie
+      POSTGRES_PASSWORD: iie
+      POSTGRES_DB: iie
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+  mailpit:
+    # Optional: catches email when EMAIL_PROVIDER=smtp, SMTP_HOST=localhost, SMTP_PORT=1025, SMTP_SECURE=false. UI at http://localhost:8025
+    image: axllent/mailpit
+    ports: ["1025:1025", "8025:8025"]
+volumes:
+  pgdata:

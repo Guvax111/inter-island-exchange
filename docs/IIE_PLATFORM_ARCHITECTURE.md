@@ -1,6 +1,6 @@
 # IIE Platform Architecture
 
-**Status:** Proposed — for review before Phase 1 begins (D1 decided; D2–D6 open)
+**Status:** Accepted. Phase 1 implemented (D1, D3, D6 decided; D2, D4, D5 open)
 **Companion:** [`IIE_PLATFORM_AUDIT.md`](./IIE_PLATFORM_AUDIT.md)
 
 The audit found no existing IIE code, so this is a greenfield architecture. It reuses the
@@ -55,14 +55,14 @@ react-hook-form, TanStack Query).
 
 | Concern | Choice | Why | Alternative |
 |---|---|---|---|
-| Repo layout | pnpm + Turborepo monorepo: `apps/web`, `apps/api`, `apps/worker`, `packages/shared`, `packages/ui`, `packages/db` | One place for shared zod schemas and types across web and API | Separate repos (more overhead) |
+| Repo layout | pnpm workspaces: `apps/web`, `apps/api` (HTTP server + worker entry point + database), `packages/shared` | One place for shared zod schemas and types across web and API. (Phase 1 simplified the originally planned six packages; see the roadmap) | Separate repos (more overhead) |
 | Web | **Next.js (App Router) + React + Tailwind + shadcn/ui** | Product, storefront, and country pages need server rendering for SEO and fast first paint on slow mobile networks. The existing shadcn components move over unchanged | Keep Vite SPA + separate prerender — workable but weaker SEO |
 | API | **NestJS (TypeScript)** on Node LTS | Module boundaries, guards for RBAC, first-class OpenAPI generation, DI for provider adapters | Fastify + hand-rolled modules |
 | Validation | **zod** schemas in `packages/shared`, used by both web forms and API | One definition of every payload | class-validator |
 | Database | **PostgreSQL 16** (managed) | ACID for money, row-level security available, full-text search, JSONB for provider payloads | — |
-| ORM / migrations | **Prisma** (or Drizzle) with SQL migrations checked in; raw SQL for triggers, RLS, sequences | Typed access plus control where needed | TypeORM |
+| ORM / migrations | **Drizzle** with generated SQL migrations checked in; hand-written SQL migrations for triggers, RLS and sequences | Typed access, no binary engine, full SQL control | Prisma |
 | Auth | Session-based auth in the API (httpOnly, `Secure`, `SameSite=Lax` cookies; server-side session table); argon2id hashing; TOTP MFA; verification via email/SMS provider | Revocable sessions and device list are requirements; avoids long-lived JWTs in the browser | Managed auth (Supabase Auth, Auth0, Clerk) — acceptable if it supports custom roles and server-side session revocation |
-| Queue / jobs | **Redis + BullMQ** | Retries, delays (dispute window), scheduled jobs | pg-boss (Postgres-only) |
+| Queue / jobs | Phase 1: **Postgres transactional outbox** polled by the worker. From Phase 3: **Redis + BullMQ** for delayed and scheduled jobs | Retries, delays (dispute window), scheduled jobs | pg-boss (Postgres-only) |
 | Files | S3-compatible storage, private buckets, pre-signed URLs, virus scan on upload | Documents and evidence must not be public | — |
 | Search | Postgres full-text + trigram behind a `SearchProvider` interface | Enough for pilot scale; swap to OpenSearch/Meilisearch later without touching callers | — |
 | Tests | Vitest (unit), Supertest against a real Postgres (integration), Playwright (E2E) | Critical money paths run against a real DB | — |
@@ -312,10 +312,10 @@ policy. Detail goes in `IIE_SECURITY.md`.
 |---|---|---|
 | D1 | Where IIE lives (see audit §0) | **Decided:** this repository, `Guvax111/inter-island-exchange` |
 | D2 | Payment partner(s) for ECCU (XCD) pilot | Begin due diligence now; architecture is provider-agnostic |
-| D3 | Managed auth vs. in-house sessions | In-house sessions in the API (control over device list, suspension, audit) |
+| D3 | Managed auth vs. in-house sessions | **Decided:** in-house sessions in the API |
 | D4 | Hosting provider and region | Managed containers + managed Postgres in the nearest region to the Eastern Caribbean |
 | D5 | Logistics partner for SLU→SVG lane | Needed before Phase 5 UAT |
-| D6 | Next.js vs. keep Vite SPA | Next.js for SEO and mobile first load |
+| D6 | Next.js vs. keep Vite SPA | **Decided:** Next.js |
 
 ## 14. Documents to produce per phase
 

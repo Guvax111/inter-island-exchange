@@ -5,8 +5,8 @@
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Audit, architecture | **Done** |
-| 1 | Core foundation: repo, auth, roles, profiles, country engine, database | **Planned — awaiting approval** (below) |
-| 2 | Marketplace: seller onboarding, storefronts, products, categories, search, cart | Not started |
+| 1 | Core foundation: repo, auth, roles, profiles, country engine, database | **Done** (see Phase 1 result below) |
+| 2 | Marketplace: seller approval, storefronts, products, categories, search, cart | **Planned — awaiting approval** (below) |
 | 3 | Orders and transaction engine: checkout, orders, state machine, notifications | Not started |
 | 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | Not started |
 | 5 | Logistics: partners, shipments, tracking, delivery confirmation | Not started |
@@ -18,7 +18,7 @@ Phase scope and exit criteria: [`IIE_PLATFORM_AUDIT.md` §20](./IIE_PLATFORM_AUD
 
 ---
 
-## Phase 1 plan — Core foundation
+## Phase 1 plan — Core foundation (as approved)
 
 ### What will be built
 
@@ -102,7 +102,72 @@ status gating, audit log written for every admin mutation and immutable afterwar
 | Hosting (D4) not yet chosen | Phase 1 is fully runnable locally and in CI; hosting only needed for staging at end of phase |
 | Scope creep into Phase 2 | Unbuilt navigation sections show "Coming soon" and are tracked in the mock audit |
 
-### Decisions requested before Phase 1 starts
+### Decisions (approved 2026-09-25)
 
-- Approve the stack in the architecture doc (D3 in-house sessions, D6 Next.js), or name changes.
-- Transactional email provider preference (or accept a sandbox until staging).
+- Next.js for the website (D6) and login handled in IIE's own backend (D3): **approved**.
+- Initial verification email provider: **Gmail** (SMTP with an App Password). See `IIE_SECURITY.md` for its limits.
+
+---
+
+## Phase 1 result
+
+**Delivered:** everything in the plan above, with the differences below. 46 automated tests (40 API integration
+tests against a real Postgres, 6 shared unit tests) pass, and a browser walk-through covered a St. Lucia
+seller signing up, verifying and applying; a St. Vincent buyer signing up on a phone-sized screen; and an
+administrator suspending an account and seeing it in the audit log.
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| Turborepo | Plain pnpm workspaces (`pnpm -r`) | Three packages do not need a build orchestrator yet; add Turborepo when builds get slow |
+| `packages/db`, `packages/ui`, `apps/worker` | Database code in `apps/api/src/db`; UI components in `apps/web/src/components/ui`; worker is `apps/api/src/worker.ts` | Each had one consumer; fewer packages means less build plumbing. Split out when a second consumer appears |
+| Redis + BullMQ for jobs | Postgres transactional outbox, polled with `FOR UPDATE SKIP LOCKED` | No Redis needed for Phase 1; BullMQ arrives with delayed jobs (dispute windows, auto-confirmation) in Phase 3 |
+| Separate `/me/buyer-profile`, `/me/seller-profile`, `/me/addresses` endpoints | One `POST /me/onboarding` taking buyer and/or seller details | Onboarding is a one-time submission; profile editing arrives with dashboards in Phase 2 |
+| Playwright E2E suite in CI | Scripted browser walk-through run manually | Automated E2E in CI is scheduled for Phase 2 |
+
+**Outstanding before real users:** a staging environment (hosting decision D4), the Gmail account and App
+Password, and pushing this repository to GitHub.
+
+---
+
+## Phase 2 plan — Marketplace
+
+### What will be built
+
+1. **Seller approval**: admin review queue (approve / reject / request changes, with reasons, audited);
+   seller status `UNDER_REVIEW → APPROVED → ACTIVE`. For the pilot, payout setup is recorded manually so
+   approved sellers can go `ACTIVE` (automated payout onboarding comes with the payment provider in Phase 4).
+2. **Storefronts**: public page `/seller/{slug}` with logo, description, country, categories, policies,
+   verification badge and (later) rating.
+3. **Catalogue**: categories (admin-managed tree), products with variants, SKU, images (private upload →
+   public CDN after moderation), inventory, weight and dimensions, country of origin, HS code, price in
+   minor units + currency. Product statuses `DRAFT → PENDING_REVIEW → ACTIVE` plus `REJECTED`, `SUSPENDED`,
+   `OUT_OF_STOCK`, `ARCHIVED`, with an admin review queue.
+4. **Search**: Postgres full-text + trigram search behind a `SearchProvider` interface; filters for seller
+   country, destination eligibility (open lanes), category, price range, currency, availability.
+5. **Marketplace pages**: `/marketplace`, product pages, country pages listing local sellers and products.
+6. **Cart**: server-side cart per buyer, quantity changes, removal, grouped by seller, currency display.
+   Shipping, duty and fee estimates show as "calculated at checkout" until Phase 3.
+7. **Seller dashboard**: overview, products, inventory, store profile.
+8. **Buyer dashboard**: overview, saved products and sellers, addresses.
+9. **Playwright E2E** in CI for sign-up → onboarding → seller approval → product listing → add to cart.
+
+### Database changes
+
+New: `seller_storefronts` (slug UQ, logo, description, policies), `categories`, `products`,
+`product_variants`, `inventory` (with reservation rows for Phase 3), `product_images`, `hs_codes`,
+`carts`, `cart_items`, `saved_items`; review columns on products. Object storage for images.
+
+### API changes
+
+`/sellers/{slug}` (public), `/products` search and detail (public), `/me/storefront`, `/me/products`
+CRUD + submit for review, `/me/cart` CRUD, `/admin/sellers` review queue, `/admin/products` review queue,
+`/admin/categories` CRUD.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Image uploads (storage, abuse, size on mobile data) | Pre-signed uploads, type/size limits, server-side resizing to web sizes, moderation before public |
+| Listing restricted goods before the compliance engine (Phase 6) exists | Every product needs admin approval in Phase 2; HS code required |
+| Search quality in Postgres at pilot scale | Fine for thousands of products; abstraction allows a search engine later |
+| Staging hosting still undecided (D4) | Needed for seller UAT with real St. Lucia businesses; decide during Phase 2 |

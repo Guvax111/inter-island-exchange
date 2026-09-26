@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: iie
+          POSTGRES_PASSWORD: iie
+          POSTGRES_DB: iie_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U iie" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://iie:iie@127.0.0.1:5432/iie_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @iie/shared build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Migrations match the schema
+        working-directory: apps/api
+        run: npx drizzle-kit check
+      - name: Dependency audit (production dependencies)
+        run: pnpm audit --prod --audit-level high
