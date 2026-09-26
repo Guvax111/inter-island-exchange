@@ -9,7 +9,7 @@ product records; no static or fake product data in production workflows.
 
 The Phase 0 audit of the previous repository (`Guvax111/lockeys-oasis-website`) is kept in that repository.
 
-Status after Phase 5. Every control below is clearly labelled; none pretends to work.
+Status after Phase 6. Every control below is clearly labelled; none pretends to work.
 
 | # | Page | Component | Mock functionality | Recommended fix | Implementation status |
 |---|---|---|---|---|---|
@@ -20,13 +20,14 @@ Status after Phase 5. Every control below is clearly labelled; none pretends to 
 | 5 | `/contact` | Contact page | — | — | **Done:** IIE's address, email and phone (also in the footer) |
 | 6 | Home, `/track` | "Track a Shipment" card | — | — | **Done (Phase 5):** signed-in buyers track by IIE transaction ID; guests are asked to sign in (tracking shows addresses and proof of delivery) |
 | 7 | Home | "Shop the Marketplace" card | — | — | **Done (Phase 2)** |
-| 8 | `/how-it-works` | Step list | Seller payout not built | Phase 6 | Each step badged **Available now**, **Test mode** (payment), **Partner to be announced** (shipping) or **Coming soon** (payout) |
+| 8 | `/how-it-works` | Step list | — | — | Each step badged **Available now**, **Test mode** (payment and payout) or **Partner to be announced** (shipping) |
 | 9 | `/[country]` | "Shipping and logistics partners" | — | — | **Done (Phase 5):** lists the active partners and brokers serving the country; until one is selected it says IIE is selecting them |
 | 10 | `/payment-security` | Transaction Safeguard section | Payments run on the sandbox provider | Contract a licensed provider and add its adapter | Labelled **Test mode**: states no real money moves |
 | 11 | `/cart`, `/checkout` | Checkout | — | — | **Done (Phase 3):** real quote and order placement |
 | 14 | `/orders/{iieId}` | "Pay EC$…" button | — (sandbox provider until one is contracted) | Licensed provider adapter | **Done (Phase 4):** opens the provider's hosted page. The sandbox page is headed "SANDBOX PAYMENT PAGE · NO REAL MONEY"; production refuses to start with the sandbox provider |
-| 15 | `/admin/payouts` | Payout list | Payout release not built | Phase 6 (after the review period) | Read-only; the page states payouts stay on hold until release arrives |
-| 16 | `/orders/{iieId}` | "Report a problem" | Resolution tools (refund, partial refund, release) not built | Phase 6 (disputes) | The report is real: recorded, seller and IIE told, automatic confirmation and payout stopped. The buyer is told IIE will contact them |
+| 15 | `/admin/payouts` | Payout list | — (sandbox provider) | Licensed provider | **Done (Phase 6):** payouts released 7 days after delivery confirmation or on a dispute decision; failed payouts can be retried. Sandbox, labelled |
+| 16 | `/orders/{iieId}` | "Report a problem" | — | — | **Done (Phase 6):** dispute conversation with photo evidence; IIE decides full or partial refund or release, and returns case by case |
+| 17 | `/tariffs`, product pages, checkout | Duties | No official tariff loaded yet | IIE imports its HS file at *Admin → Tariffs* | Lookups work; without a schedule the figures are labelled **IIE estimate** |
 | 12 | `/dashboard/buyer` | Orders card | — | — | **Done (Phase 3):** links to real orders |
 | 13 | `/seller/{slug}` | Rating / completed orders | No completed orders or reviews yet | Phases 6 and 7 | Shows "New seller on IIE"; no fake ratings |
 

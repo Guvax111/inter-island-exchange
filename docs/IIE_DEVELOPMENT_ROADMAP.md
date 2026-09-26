@@ -10,8 +10,8 @@
 | 3 | Orders and transaction engine: checkout, orders, state machine, notifications | **Done** (see Phase 3 result below) |
 | 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | **Done on the sandbox provider** (see Phase 4 result below); staging package for St. Vincent ready |
 | 5 | Logistics: partners, shipments, tracking, delivery confirmation | **Done** (see Phase 5 result below); partner to be selected |
-| 6 | Compliance, disputes and payout release | **Planned — awaiting decisions** (below) |
-| 7 | Administration and analytics | Not started |
+| 6 | Disputes, payout release, seller verification, HS tariffs | **Done** (see Phase 6 result below); tariff file to be imported |
+| 7 | Administration, analytics and settlement | **Planned — awaiting decisions** (below) |
 | 8 | Production readiness | Not started |
 
 Phase scope and exit criteria: [`IIE_PLATFORM_AUDIT.md` §20](./IIE_PLATFORM_AUDIT.md#20-prioritised-implementation-plan).
@@ -504,7 +504,7 @@ release, compliance reviews and holds · seller: payout history.
 | Regulatory: IIE deciding who gets held funds | Decisions are instructions to the licensed provider under its terms; legal review before launch |
 | Prohibited goods listed | Rules checked at listing and checkout; compliance review queue |
 
-### Decisions requested before Phase 6
+### Decisions requested before Phase 6 (answered 2026-09-26, see below)
 
 - **Review period:** how long after delivery is confirmed before the seller is paid (suggested: **7 days**)?
 - **Returns:** when a buyer is refunded, must they return the goods, and who pays return shipping?
@@ -513,3 +513,71 @@ release, compliance reviews and holds · seller: payout history.
 - **Restricted goods:** the list of prohibited or licensed products for St. Lucia and St. Vincent (e.g. medicines,
   alcohol, agricultural products) — or should the pilot stay limited to baby products?
 - **Seller verification:** which documents are required (business registration certificate, ID, proof of address)?
+
+### Decisions (2026-09-26)
+
+- **Review period:** the seller is paid **7 days after delivery is confirmed**.
+- **Returns:** when a buyer is refunded, whether the goods must be returned is decided **case by case by the
+  administrator**.
+- **Partial refunds:** **yes**, IIE can give partial refunds.
+- **Tariffs:** IIE provides the **Harmonized commodity descriptions and duties for CARICOM participating countries**; the
+  platform shows them to buyers and sellers for the country they are trading into.
+- **Seller verification:** sellers must provide **proof of business registration or a national ID**.
+- Not yet answered: how sellers are paid before a payment provider is contracted (built: payouts through the sandbox
+  provider, clearly labelled); the restricted-goods list (built: restrictions carried by the tariff file).
+
+---
+
+## Phase 6 result
+
+**Delivered:** payout release after the 7-day review period, disputes with evidence and IIE decisions (full refund,
+partial refund, release; returns case by case), seller verification documents, and the HS tariff engine.
+131 API tests (15 new, including 6 tariff-parser unit tests: payout release, three dispute outcomes, tariff imports in
+CSV and Excel, lookups, product page and checkout pricing from a schedule, prohibited goods; the seller review test now
+covers document privacy and the approval gate), 6 shared tests and the end-to-end browser test pass. The browser test now also has the seller upload a
+certificate of registration that IIE accepts before approval, IIE import and activate a (test) tariff file that the
+seller and buyer then see, and — after delivery — the buyer report a missing pack, the seller answer, IIE decide a
+EC$45.00 partial refund and the seller receive the remaining EC$45.00.
+
+Details: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md) (payouts, disputes, refunds),
+[`IIE_TARIFFS.md`](IIE_TARIFFS.md) (HS codes and duties), [`IIE_SECURITY.md`](IIE_SECURITY.md) (verification documents).
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| Restricted-goods rules table | Restrictions come from the tariff file (prohibited / licence required per HS line); prohibited goods cannot be bought | No list was provided; the tariff schedule is the authoritative source |
+| KYC document types, compliance queue | Proof of business registration or national ID, reviewed with the seller application | The decision covers sellers; buyer verification levels stay as in Phase 3 |
+| Payout batches, partner settlements | Per-transaction payouts through the provider; fee and shipping stay in `provider_held` | Settlement with the provider and the logistics partner is Phase 7 |
+| Evidence as a separate table | Messages carry optional photo evidence | One conversation per dispute is simpler for everyone |
+| — | Countries of origin outside CARICOM (US, CA, GB, CN…) | Needed to apply the general (CET) duty to goods made outside CARICOM |
+
+**Still open:**
+
+- **IIE's HS file** has not been received yet. It is imported at *Admin → Tariffs* (see
+  [`IIE_TARIFFS.md`](IIE_TARIFFS.md#loading-iies-hs-file)).
+- **Shipping on full refunds:** who bears the carrier's charge after a full refund of a delivered order.
+
+---
+
+## Phase 7 plan — Administration, analytics and settlement
+
+### What will be built
+
+1. **Settlement:** record IIE fee collection and payments to logistics partners against the ledger
+   (`iie_fee_revenue`, `logistics_payable`), with statements per partner and per period; reconciliation with the
+   provider's reports.
+2. **Dashboards:** for IIE (orders, GMV, fees, disputes, delivery times, payouts, per country and lane), for sellers
+   (sales, payouts, ratings) and for partners (shipments, on-time rate).
+3. **Reviews and ratings:** buyers rate completed orders; seller storefronts show ratings (replaces "New seller on IIE").
+4. **Messaging:** buyer–seller questions on products and orders, moderated.
+5. **Help Center:** articles for buyers, sellers and partners (replaces "Coming soon").
+6. **Business Solutions:** business buyer accounts (invoices, purchase order numbers) and bulk listing for sellers.
+7. **Admin tools:** exports (CSV) for transactions, payouts, disputes; user impersonation for support (audited, read-only).
+
+### Decisions requested before Phase 7
+
+- **Reports:** which figures IIE's directors want to see first, and how often (daily/weekly email?).
+- **Reviews:** may buyers leave written reviews, or ratings only? Does IIE moderate before publishing?
+- **Messaging:** should buyers and sellers message each other directly, or only through IIE?
+- **Help Center:** who writes the content (IIE staff, or drafts from us for approval)?
+- **Fee and shipping settlement:** how the provider pays IIE its fee, and how IIE pays the logistics partner (per order,
+  weekly, monthly).

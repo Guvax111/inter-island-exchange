@@ -8,6 +8,8 @@ import { FormError } from '@/components/forms/field';
 import { HoursCountdown } from '@/components/orders/countdown';
 import { CostBreakdown } from '@/components/orders/cost-breakdown';
 import { ShipmentPanel } from '@/components/orders/shipment-panel';
+import { TariffLine } from '@/components/orders/tariff-line';
+import { DisputePanel } from '@/components/disputes/dispute-panel';
 import { OrderTimeline } from '@/components/orders/order-timeline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,9 +59,14 @@ export default function SellerOrderPage() {
     CUSTOMS_HOLD: 'Held by customs. IIE may contact you for documents.',
     CUSTOMS_CLEARED: 'Cleared customs; delivery is next.',
     OUT_FOR_DELIVERY: 'Out for delivery.',
-    DELIVERED: 'Delivered. The buyer has 3 days to confirm or report a problem; your payout follows after the review period.',
-    DELIVERY_CONFIRMED: 'Delivery confirmed. Your payout is released after the review period.',
-    DISPUTED: 'The buyer reported a problem. IIE is looking into it and may contact you. Your payout is on hold until it is resolved.',
+    DELIVERED: 'Delivered. The buyer has 3 days to confirm or report a problem; you are paid 7 days after delivery is confirmed.',
+    DELIVERY_CONFIRMED: 'Delivery confirmed. You are paid in 7 days if the buyer reports no problem.',
+    DISPUTE_WINDOW: 'Delivery confirmed. You are paid when the 7-day review period ends, if the buyer reports no problem.',
+    DISPUTED: 'The buyer reported a problem. Reply below with your side and any photos; IIE decides. Your payout is on hold until then.',
+    PARTIALLY_REFUNDED: 'IIE decided on the buyer’s report: part of the payment was refunded and your payout reduced.',
+    PAYOUT_APPROVED: 'Your payout has been approved.',
+    PAYOUT_PROCESSING: 'Your payout is being sent by the payment provider.',
+    COMPLETED: 'Complete: you have been paid.',
     CANCELLED: 'This order was cancelled. Nothing to do.',
     REFUNDED: 'The buyer was refunded in full. Nothing to do; any stock was put back.',
     COMPLIANCE_HOLD: 'IIE is reviewing this order. Do not prepare or ship until IIE tells you.',
@@ -157,6 +164,7 @@ export default function SellerOrderPage() {
                   <li key={i.sku} className="flex justify-between gap-4 py-2">
                     <span>
                       {i.quantity} × {i.title} ({i.variantName}) <span className="text-muted-foreground">SKU {i.sku}</span>
+                      <TariffLine tariff={i.tariff} />
                     </span>
                     <span>{i.lineTotal.formatted}</span>
                   </li>
@@ -164,6 +172,16 @@ export default function SellerOrderPage() {
               </ul>
             </CardContent>
           </Card>
+          {order.dispute && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Problem reported by the buyer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DisputePanel iieId={order.iieId} />
+              </CardContent>
+            </Card>
+          )}
           {order.shipment && (
             <Card>
               <CardHeader>
@@ -189,6 +207,12 @@ export default function SellerOrderPage() {
           </CardHeader>
           <CardContent>
             <CostBreakdown {...order.amounts} />
+            {order.payout && (
+              <p className="mt-3 text-sm">
+                Payout: <strong>{order.payout.amount.formatted}</strong> · {order.payout.status === 'ON_HOLD' ? 'held until the review period ends' : order.payout.status.toLowerCase().replace('_', ' ')}
+                {order.payout.paidAt && ` on ${new Date(order.payout.paidAt).toLocaleDateString()}`}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

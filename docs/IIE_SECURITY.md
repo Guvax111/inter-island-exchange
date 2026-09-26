@@ -36,6 +36,17 @@
 | Search | Free text is reduced to letters and digits before building the query, so it cannot inject query syntax; parameterised SQL | `marketplace/search.provider.ts`; search test |
 | Cart | Server checks visibility, stock, trade lane and own-product rules on every add; cart holds quantities only, never prices | `cart.service.ts`; cart tests |
 
+## Added in Phase 6
+
+| Area | Control | Where / test |
+|---|---|---|
+| Seller verification | Proof of business registration or national ID required and accepted by IIE before approval; reviewers cannot review their own documents | `seller-documents.service.ts`; seller review test |
+| Document privacy | Stored under random keys; visible only to the seller and reviewers for the seller's country; always downloaded as an attachment with `Content-Security-Policy: sandbox`; photos re-encoded (location metadata removed); SHA-256 recorded | same |
+| Disputes | Only the buyer, the seller and IIE staff for either country can read or post; evidence photos private to them; the conversation is append-only; decisions need `dispute.resolve` and are audited | `disputes.service.ts`; dispute tests |
+| Refund and payout limits | Partial refunds at most the seller payout; payouts only from `PAYOUT_APPROVED`; idempotency keys on refunds and payouts; ledger balance enforced by the database | payments tests |
+| Tariff imports | Administrators only; file size limit; content parsed, never executed; drafts until activated; every import audited | tariff tests |
+| Dependencies | `exceljs` for Excel import, with its `uuid` dependency overridden to a patched version | `pnpm-workspace.yaml` |
+
 ## Added in Phase 5
 
 | Area | Control | Where / test |

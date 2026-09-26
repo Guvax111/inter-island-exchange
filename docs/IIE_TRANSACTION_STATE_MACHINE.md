@@ -62,8 +62,8 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 | CUSTOMS_PROCESSING | CUSTOMS_CLEARED | LOGISTICS, CUSTOMS | 5 |
 | CUSTOMS_CLEARED → OUT_FOR_DELIVERY → DELIVERED | | LOGISTICS | 5 |
 | DELIVERED | DELIVERY_CONFIRMED | BUYER, SYSTEM | 5 · SYSTEM confirms **3 days** after delivery is recorded (`delivery_confirm_due_at`) |
-| DELIVERY_CONFIRMED | DISPUTE_WINDOW | SYSTEM | 6 |
-| DISPUTE_WINDOW | PAYOUT_APPROVED | SYSTEM, ADMIN | 6 |
+| DELIVERY_CONFIRMED | DISPUTE_WINDOW | SYSTEM | 6 · immediately; `review_ends_at` = +7 days |
+| DISPUTE_WINDOW | PAYOUT_APPROVED | SYSTEM, ADMIN | 6 · SYSTEM when the review period ends |
 | PAYOUT_APPROVED | PAYOUT_PROCESSING | SYSTEM, PAYMENT | 4/6 |
 | PAYOUT_PROCESSING | COMPLETED | PAYMENT, SYSTEM | 4/6 |
 
@@ -129,3 +129,7 @@ How payment events move a transaction, the ledger postings and refunds: [`IIE_PA
 ## Logistics
 
 How shipments are assigned, who records each step and how delivery is confirmed: [`IIE_LOGISTICS_ARCHITECTURE.md`](IIE_LOGISTICS_ARCHITECTURE.md). A buyer's "report a problem" moves `DELIVERED` to `DISPUTED` (hold); resolving disputes is Phase 6.
+
+## Disputes and payouts
+
+The buyer can move `DELIVERED` or `DISPUTE_WINDOW` to `DISPUTED`. IIE decides: `REFUNDED` (full refund), `PARTIALLY_REFUNDED` then `PAYOUT_APPROVED` (partial refund), or `PAYOUT_APPROVED` (release). From `PAYOUT_APPROVED` the payout goes to the provider (`PAYOUT_PROCESSING`) and the transaction ends `COMPLETED`. Details: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md#disputes-and-refunds-phase-6).

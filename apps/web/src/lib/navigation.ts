@@ -25,6 +25,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: 'Countries', href: '/countries', status: 'live' },
   { label: 'Logistics', href: '/logistics', status: 'live' },
   { label: 'Payment & Transaction Security', href: '/payment-security', status: 'live' },
+  { label: 'Duties & Tariffs', href: '/tariffs', status: 'live' },
   { label: 'Business Solutions', href: '/business-solutions', status: 'coming-soon' },
   { label: 'Help Center', href: '/help', status: 'coming-soon' },
   { label: 'About IIE', href: '/about', status: 'live' },

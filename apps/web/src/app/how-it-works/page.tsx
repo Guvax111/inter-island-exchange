@@ -12,7 +12,7 @@ const steps: { title: string; text: string; live: boolean | 'test' | 'partner' }
   { title: 'Payment held safely', text: 'A licensed payment partner holds the payment while your order ships. The seller has 48 hours to confirm, or you are refunded automatically.', live: 'test' },
   { title: 'Shipping and customs', text: 'Logistics partners collect, export, clear customs and deliver. Track every step under your IIE transaction ID.', live: 'partner' },
   { title: 'Confirm delivery', text: 'You confirm your order arrived or report a problem within 3 days. Without an answer, the delivery is confirmed automatically.', live: true },
-  { title: 'Seller paid', text: 'The payment is released to the seller and the transaction is complete.', live: false },
+  { title: 'Seller paid', text: 'Seven days after delivery is confirmed, if no problem is reported, the payment is released to the seller. Reported problems are decided by IIE: full or partial refund, or release.', live: 'test' },
 ];
 
 export default function HowItWorksPage() {

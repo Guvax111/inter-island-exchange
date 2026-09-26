@@ -11,6 +11,8 @@ import { OrderTimeline } from '@/components/orders/order-timeline';
 import { HoursCountdown } from '@/components/orders/countdown';
 import { PaymentCountdown } from '@/components/orders/payment-countdown';
 import { ShipmentPanel } from '@/components/orders/shipment-panel';
+import { DisputePanel } from '@/components/disputes/dispute-panel';
+import { TariffLine } from '@/components/orders/tariff-line';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -95,6 +97,16 @@ function Order() {
               <OrderTimeline order={order} />
             </CardContent>
           </Card>
+          {order.dispute && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Reported problem</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DisputePanel iieId={order.iieId} />
+              </CardContent>
+            </Card>
+          )}
           {order.shipment && (
             <Card>
               <CardHeader>
@@ -115,6 +127,7 @@ function Order() {
                   <li key={i.sku} className="flex justify-between gap-4 py-2">
                     <span>
                       {i.quantity} × {i.title} <span className="text-muted-foreground">({i.variantName})</span>
+                      <TariffLine tariff={i.tariff} />
                     </span>
                     <span className="font-medium">{i.lineTotal.formatted}</span>
                   </li>
@@ -261,6 +274,28 @@ function DeliveryPanel({ order, onChange }: { order: OrderDetail; onChange: (o: 
       setBusy(false);
     }
   }
+  const reportForm = (
+    <form
+      className="mt-3 max-w-lg space-y-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void act('report-problem', { reason });
+      }}
+    >
+      <label htmlFor="problem" className="text-sm font-medium">
+        What went wrong? (missing or damaged items, wrong product…)
+      </label>
+      <Textarea id="problem" value={reason} onChange={(e) => setReason(e.target.value)} required minLength={10} maxLength={1000} />
+      <div className="flex gap-2">
+        <Button size="sm" type="submit" disabled={busy || reason.trim().length < 10}>
+          Send report
+        </Button>
+        <Button size="sm" variant="ghost" type="button" onClick={() => setReporting(false)}>
+          Back
+        </Button>
+      </div>
+    </form>
+  );
   switch (order.status) {
     case 'PREPARING_SHIPMENT':
     case 'PICKUP_SCHEDULED':
@@ -302,26 +337,24 @@ function DeliveryPanel({ order, onChange }: { order: OrderDetail; onChange: (o: 
               </Button>
             </div>
           ) : (
-            <form
-              className="mt-3 max-w-lg space-y-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void act('report-problem', { reason });
-              }}
-            >
-              <label htmlFor="problem" className="text-sm font-medium">
-                What went wrong? (missing or damaged items, wrong product…)
-              </label>
-              <Textarea id="problem" value={reason} onChange={(e) => setReason(e.target.value)} required minLength={10} maxLength={1000} />
-              <div className="flex gap-2">
-                <Button size="sm" type="submit" disabled={busy || reason.trim().length < 10}>
-                  Send report
-                </Button>
-                <Button size="sm" variant="ghost" type="button" onClick={() => setReporting(false)}>
-                  Back
-                </Button>
-              </div>
-            </form>
+            reportForm
+          )}
+          <FormError message={error} />
+        </Notice>
+      );
+    case 'DISPUTE_WINDOW':
+      return (
+        <Notice tone="good" title="Delivery confirmed">
+          <p className="mt-1 text-sm">
+            If something is wrong with your order you can still report it
+            {order.reviewEndsAt && <> (<HoursCountdown dueAt={order.reviewEndsAt} />)</>}. After that the seller is paid.
+          </p>
+          {!reporting ? (
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => setReporting(true)}>
+              Report a problem
+            </Button>
+          ) : (
+            reportForm
           )}
           <FormError message={error} />
         </Notice>
@@ -335,7 +368,20 @@ function DeliveryPanel({ order, onChange }: { order: OrderDetail; onChange: (o: 
     case 'DISPUTED':
       return (
         <Notice tone="wait" title="Problem reported">
-          <p className="mt-1 text-sm">IIE is looking into your report and will contact you. Your payment stays held by the payment provider until it is resolved.</p>
+          <p className="mt-1 text-sm">IIE is looking into your report. Add details or photos below; your payment stays held by the payment provider until IIE decides.</p>
+        </Notice>
+      );
+    case 'PARTIALLY_REFUNDED':
+    case 'PAYOUT_APPROVED':
+    case 'PAYOUT_PROCESSING':
+    case 'COMPLETED':
+      return order.dispute?.decision === 'PARTIAL_REFUND' ? (
+        <Notice tone="info" title={`Partly refunded: ${order.dispute.refundAmount?.formatted ?? ''}`}>
+          <p className="mt-1 text-sm">IIE decided on your report; see the decision below. Refunds usually reach your account within 5–10 business days, depending on your bank.</p>
+        </Notice>
+      ) : (
+        <Notice tone="good" title="Complete">
+          <p className="mt-1 text-sm">Thank you for shopping with IIE.</p>
         </Notice>
       );
     default:

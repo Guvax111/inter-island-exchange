@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { BadgeCheck, Truck } from 'lucide-react';
 import { AddToCart } from '@/components/marketplace/add-to-cart';
+import { TariffCard, formatHs } from '@/components/tariffs/tariff-card';
 import { serverGet } from '@/lib/server-api';
 import type { PublicProduct } from '@/lib/types';
 
@@ -24,7 +25,7 @@ export default async function ProductPage({ params }: Props) {
   const facts: [string, string | null][] = [
     ['Brand', product.brand],
     ['Country of origin', product.countryOfOrigin?.name ?? null],
-    ['HS code', product.hsCode],
+    ['HS code', product.hsCode ? formatHs(product.hsCode) : null],
     ['Weight', product.weightGrams ? `${(product.weightGrams / 1000).toFixed(2)} kg` : null],
     ['Package size', product.dimensionsMm ? `${product.dimensionsMm.length / 10} × ${product.dimensionsMm.width / 10} × ${product.dimensionsMm.height / 10} cm` : null],
     ...Object.entries(product.attributes),
@@ -91,6 +92,25 @@ export default async function ProductPage({ params }: Props) {
                 </div>
               ))}
           </dl>
+          {product.importInfo.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-lg font-semibold">Import duties and taxes</h2>
+              <div className="mt-2 space-y-3">
+                {product.importInfo.map(({ destination, tariff }) =>
+                  tariff ? (
+                    <TariffCard key={destination.code} t={tariff} originName={product.countryOfOrigin?.name} />
+                  ) : (
+                    <p key={destination.code} className="text-sm text-muted-foreground">
+                      Importing into {destination.name}: no duty information yet.
+                    </p>
+                  ),
+                )}
+              </div>
+              <Link href="/tariffs" className="mt-2 inline-block text-sm underline">
+                Look up other HS codes
+              </Link>
+            </section>
+          )}
         </div>
       </div>
     </section>

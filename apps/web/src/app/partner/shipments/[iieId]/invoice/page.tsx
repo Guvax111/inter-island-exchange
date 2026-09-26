@@ -15,7 +15,7 @@ interface Invoice {
   exporter: { name: string; phone: string; address: Record<string, string | null> };
   consignee: { name: string; phone: string | null; address: Record<string, string | null> };
   route: { origin: string; destination: string };
-  lines: { description: string; sku: string; hsCode: string | null; countryOfOrigin: string; countryOfOriginName: string; caricomOrigin: boolean; quantity: number; unitValue: Money; totalValue: Money; netWeightGrams: number }[];
+  lines: { description: string; sku: string; hsCode: string | null; tariffDescription: string | null; countryOfOrigin: string; countryOfOriginName: string; caricomOrigin: boolean; quantity: number; unitValue: Money; totalValue: Money; netWeightGrams: number }[];
   totals: { goodsValue: Money; freight: Money; declaredWeightGrams: number; parcelWeightGrams: number };
   declaration: string;
 }
@@ -83,6 +83,7 @@ export default function InvoicePage() {
               <td className="py-1 pr-2">
                 {l.description}
                 <span className="block text-xs text-muted-foreground">SKU {l.sku}</span>
+                {l.tariffDescription && <span className="block text-xs">Tariff: {l.tariffDescription}</span>}
               </td>
               <td className="py-1 pr-2 font-mono">{hs(l.hsCode)}</td>
               <td className="py-1 pr-2">

@@ -10,7 +10,7 @@
 - Status columns are `varchar` with `CHECK` constraints (easier to evolve than Postgres enums).
 - All timestamps are `timestamptz`.
 - Money (from Phase 2): `bigint` minor units plus a `char(3)` currency code. No floating point.
-- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`, `payment_events`, `ledger_entries`, `exchange_rates`, `shipment_events`, `delivery_proofs`. `transactions.iie_id` cannot be changed. Every ledger posting must balance (deferred constraint trigger `ledger_entries_balanced`, checked at commit).
+- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`, `payment_events`, `ledger_entries`, `exchange_rates`, `shipment_events`, `delivery_proofs`, `dispute_messages`. `transactions.iie_id` cannot be changed. Every ledger posting must balance (deferred constraint trigger `ledger_entries_balanced`, checked at commit).
 - Secrets are never stored raw: session tokens and one-time tokens are SHA-256 hashes; TOTP secrets are AES-256-GCM encrypted; passwords are argon2id.
 - Schema changes: edit `schema.ts`, run `pnpm --filter @iie/api db:generate`, review the SQL, commit both. CI fails if they drift (`drizzle-kit check`).
 
@@ -131,9 +131,22 @@ users 1─N audit_logs (as actor)
 `transactions.delivery_confirm_due_at` (partial index) drives the 3-day automatic confirmation. `media_assets.kind` adds
 `DELIVERY_PHOTO` and `DELIVERY_SIGNATURE`.
 
+## Phase 6 tables
+
+| Table | Purpose | Key columns / rules |
+|---|---|---|
+| `disputes` | One per transaction | `reason`, `status` (`OPEN`, `RESOLVED`), `decision`, `refund_amount_minor`, `return_required`, `return_instructions`, `decision_note`, `decided_by/at` |
+| `dispute_messages` | Conversation | Append-only; `author_role` (`BUYER`, `SELLER`, `IIE`), `body`, optional `media_id` (photo evidence) |
+| `seller_documents` | Proof of registration or ID | `type`, private `storage_key`, `sha256`, `status` (`PENDING`, `ACCEPTED`, `REJECTED`), review fields |
+| `tariff_imports`, `tariff_schedules`, `tariff_lines` | HS tariff schedules | See [`IIE_TARIFFS.md`](IIE_TARIFFS.md#data); one `ACTIVE` schedule per country (partial unique index) |
+
+`transactions.review_ends_at` (partial index) drives payout release; `payouts.status` adds `FAILED`; `order_items` adds the
+frozen tariff (`tariff_hs_code`, `tariff_description`, `duty_rate_bps`, `vat_rate_bps`, `tariff_source`);
+`media_assets.kind` adds `DISPUTE_EVIDENCE`. Countries with `regional_bloc = 'EXTRA_REGIONAL'` are origins only.
+
 ## Planned tables (later phases)
 
 Designed in [`IIE_PLATFORM_ARCHITECTURE.md` §7](./IIE_PLATFORM_ARCHITECTURE.md#7-data-model-core-entities):
 restricted_product_rules (Phase 6);
 payout_accounts (with the licensed payment provider);
-compliance_checks, kyc_verifications, disputes, dispute_evidence (Phase 6); messages, reviews (Phase 7).
+messages, reviews, settlements (Phase 7).

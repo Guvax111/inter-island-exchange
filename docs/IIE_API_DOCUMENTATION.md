@@ -199,6 +199,28 @@ Order detail (`/me/orders/{iieId}`, `/me/sales/{iieId}`, `/admin/transactions/{i
 `canConfirmDelivery`, `deliveryConfirmDueAt` and `shipment` (partners, events, customs, weights except for buyers, proof
 of delivery; image links for buyers and staff only).
 
+## Endpoints (Phase 6 — payouts, disputes, verification, tariffs)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/me/orders/{iieId}/report-problem` | `dispute.create.own` | `{ reason }` (10–1000). From `DELIVERED` or during the 7-day review (`DISPUTE_WINDOW`); else `409` |
+| GET | `/disputes/{iieId}` | Buyer, seller, or IIE staff for either country | Conversation, decision; `limits` for IIE only |
+| POST | `/disputes/{iieId}/messages` | Same | Multipart `body`, optional `photo`. `409 DISPUTE_CLOSED` after the decision |
+| GET | `/admin/disputes?status=OPEN\|ALL` | `transaction.read.any` (country-scoped) | Queue |
+| POST | `/admin/disputes/{iieId}/decision` | `dispute.resolve` | `{ decision: FULL_REFUND\|PARTIAL_REFUND\|RELEASE_TO_SELLER, refundAmount?, returnRequired, returnInstructions?, note }`. Errors: `REFUND_TOO_LARGE`, `DISPUTE_CLOSED` |
+| GET | `/me/payouts` | `payout.read.own` | Seller's payouts with due and paid dates |
+| POST | `/admin/payouts/{iieId}/retry` | `payout.approve` | Retry a failed payout |
+| GET/POST | `/me/seller/documents` | `product.manage.own` | Multipart `type` (`BUSINESS_REGISTRATION`, `NATIONAL_ID`), `file` (PDF/JPEG/PNG/WebP, ≤ 10 MB) |
+| GET | `/seller-documents/{id}` | The seller, or `seller.review` in the seller's country | Always an attachment |
+| POST | `/admin/seller-documents/{id}/review` | `seller.review` | `{ decision: ACCEPT\|REJECT, note? }`. Seller approval requires an accepted document (`DOCUMENT_REQUIRED`) |
+| GET | `/tariffs/lookup` · `/tariffs/search` · `/tariffs/coverage` | Public | See [`IIE_TARIFFS.md`](IIE_TARIFFS.md#api) |
+| GET/POST | `/admin/tariffs/imports[/{id}]`, `…/activate`, `…/discard` | `config.manage` | Tariff imports |
+| GET | `/countries?scope=origins` | Public | Adds countries used only as a country of origin |
+
+Public product detail adds `importInfo[]` (per destination: tariff resolution). Checkout quote lines and order items add
+`tariff`. Order detail adds `canReportProblem`, `reviewEndsAt`, `dispute`, and for sellers/IIE `payout`. Checkout error
+`NOT_IMPORTABLE` for goods the destination prohibits.
+
 ### Health
 
 `GET /health` (public) → `{ status: "ok" }` after a database round trip.

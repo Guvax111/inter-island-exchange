@@ -2,7 +2,7 @@
 
 A secure digital marketplace and trade platform connecting buyers and sellers across CARICOM.
 
-**Status:** Phases 1–5 complete (payments on a sandbox provider; logistics partner to be selected).
+**Status:** Phases 1–6 complete (payments and payouts on a sandbox provider; logistics partner to be selected; HS tariff file to be imported).
 - **Phase 1 (core foundation):** registration, email verification, login with optional two-step verification,
   roles and permissions, onboarding, the country engine, admin tools and an append-only audit log.
 - **Phase 2 (marketplace):** seller approval, storefronts, product listings with IIE review, photos, stock, search,
@@ -17,8 +17,12 @@ A secure digital marketplace and trade platform connecting buyers and sellers ac
   steps, commercial invoice, proof of delivery with photo and signature), buyer delivery confirmation with automatic
   confirmation after 3 days.
 
+- **Phase 6:** seller paid 7 days after delivery is confirmed; disputes with evidence and IIE decisions (full or partial
+  refund, release; returns case by case); proof of business registration or national ID for sellers; HS tariff
+  schedules per CARICOM country (import from CSV/Excel) shown to sellers and buyers and used for duty estimates.
+
 Staging is hosted in St. Vincent and the Grenadines: see [`docs/IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md).
-Phase 6 (disputes, payout release, compliance) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+Phase 7 (administration, analytics, settlement) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
 
 **Contact:** Inter-Island Exchange, Inc. · Arnos Vale, St. Vincent and the Grenadines · info@interislandexchange.com · (347) 497-3977
 
@@ -83,14 +87,15 @@ CI runs the same steps plus a migration drift check, a dependency audit and the 
 | [`IIE_TRANSACTION_STATE_MACHINE.md`](docs/IIE_TRANSACTION_STATE_MACHINE.md) | Every transaction state, who may move it, and how amounts are frozen |
 | [`IIE_DATABASE_SCHEMA.md`](docs/IIE_DATABASE_SCHEMA.md) | Tables, rules and planned entities |
 | [`IIE_API_DOCUMENTATION.md`](docs/IIE_API_DOCUMENTATION.md) | API conventions and endpoints ([`openapi.json`](docs/openapi.json)) |
-| [`IIE_PAYMENT_ARCHITECTURE.md`](docs/IIE_PAYMENT_ARCHITECTURE.md) | Payment provider abstraction, sandbox, webhooks, ledger, refunds, payouts |
+| [`IIE_PAYMENT_ARCHITECTURE.md`](docs/IIE_PAYMENT_ARCHITECTURE.md) | Payment provider abstraction, sandbox, webhooks, ledger, refunds, payouts, disputes |
 | [`IIE_LOGISTICS_ARCHITECTURE.md`](docs/IIE_LOGISTICS_ARCHITECTURE.md) | Partners, customs brokers, shipments, proof of delivery, delivery confirmation |
+| [`IIE_TARIFFS.md`](docs/IIE_TARIFFS.md) | HS codes, duties and restrictions: import format, lookups, where they are shown |
 | [`IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md) | Staging server in St. Vincent: install, backups, restore, security checklist |
 | [`IIE_COUNTRY_ENGINE.md`](docs/IIE_COUNTRY_ENGINE.md) | How countries, currencies and trade lanes are configured |
 | [`IIE_SECURITY.md`](docs/IIE_SECURITY.md) | Security controls, secrets, Gmail limits, known gaps |
 | [`MOCK_FUNCTIONALITY_AUDIT.md`](docs/MOCK_FUNCTIONALITY_AUDIT.md) | Every control that is not yet functional, and how it is labelled |
 
-Compliance and dispute documents are written in the phase that builds them.
+Analytics and settlement documents are written in the phase that builds them.
 
 ## Important
 

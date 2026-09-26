@@ -40,6 +40,7 @@ export interface CategoryNode {
 }
 
 export interface PublicProduct {
+  importInfo: { destination: { code: string; name: string }; tariff: TariffResolution | null }[];
   id: string;
   title: string;
   shortDescription: string;
@@ -130,7 +131,15 @@ export interface Quote {
   shipsFrom: string;
   shipsTo: string;
   address: { line1: string; line2: string | null; city: string; region: string | null; country: string };
-  lines: { sku: string; title: string; variantName: string; quantity: number; unitPrice: Money; lineTotal: Money }[];
+  lines: {
+    sku: string;
+    title: string;
+    variantName: string;
+    quantity: number;
+    unitPrice: Money;
+    lineTotal: Money;
+    tariff: { hsCode: string; description: string; dutyPercent: number | null; vatPercent: number | null; source: string; kind: 'TARIFF_SCHEDULE' | 'IIE_ESTIMATE'; restriction: string; varies: boolean } | null;
+  }[];
   weightKg: number;
   productCost: Money;
   shipping: Money & { serviceName: string; isPlaceholder: boolean };
@@ -165,11 +174,25 @@ export interface OrderDetail {
   canMarkReady: boolean;
   canConfirmDelivery: boolean;
   deliveryConfirmDueAt: string | null;
+  canReportProblem: boolean;
+  reviewEndsAt: string | null;
+  dispute: DisputeSummary | null;
+  payout?: { status: string; amount: Money; paidAt: string | null; providerReference: string | null } | null;
   shipment: ShipmentView | null;
   seller: { name: string; slug: string };
   buyer: { firstName: string; lastName?: string; email?: string };
   deliveryAddress: Record<string, string | null>;
-  items: { sku: string; title: string; variantName: string; quantity: number; unitPrice: Money; lineTotal: Money; hsCode: string | null; countryOfOrigin: string }[];
+  items: {
+    sku: string;
+    title: string;
+    variantName: string;
+    quantity: number;
+    unitPrice: Money;
+    lineTotal: Money;
+    hsCode: string | null;
+    countryOfOrigin: string;
+    tariff: { hsCode: string | null; description: string; dutyPercent: number | null; vatPercent: number | null; source: string | null } | null;
+  }[];
   amounts: {
     productCost: Money;
     shipping: Money;
@@ -255,4 +278,68 @@ export interface PartnerShipmentDetail {
   delivery: { address: Record<string, string | null>; contact: { name: string; phone: string | null } };
   items: { sku: string; title: string; variantName: string; quantity: number; unitWeightGrams: number }[];
   shipment: ShipmentView;
+}
+
+export interface SellerDocument {
+  id: string;
+  type: 'BUSINESS_REGISTRATION' | 'NATIONAL_ID';
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  fileName: string;
+  contentType: string;
+  bytes: number;
+  reviewNote: string | null;
+  uploadedAt: string;
+  reviewedAt: string | null;
+  url: string;
+}
+
+export const DOCUMENT_TYPE_LABELS: Record<SellerDocument['type'], string> = {
+  BUSINESS_REGISTRATION: 'Proof of business registration',
+  NATIONAL_ID: 'National ID',
+};
+
+export interface DisputeSummary {
+  status: 'OPEN' | 'RESOLVED';
+  reason: string;
+  decision: 'FULL_REFUND' | 'PARTIAL_REFUND' | 'RELEASE_TO_SELLER' | null;
+  refundAmount: Money | null;
+  returnRequired: boolean;
+  returnInstructions: string | null;
+  decisionNote: string | null;
+  decidedAt: string | null;
+}
+
+export interface DisputeView extends Omit<DisputeSummary, 'status'> {
+  iieId: string;
+  status: string;
+  statusLabel: string;
+  disputeStatus: 'OPEN' | 'RESOLVED';
+  yourRole: 'BUYER' | 'SELLER' | 'IIE';
+  canMessage: boolean;
+  openedAt: string;
+  limits?: { total: Money; maxPartialRefund: Money | null };
+  messages: { role: 'BUYER' | 'SELLER' | 'IIE'; author: string; body: string; photoUrl: string | null; at: string }[];
+}
+
+export const DECISION_LABELS: Record<NonNullable<DisputeSummary['decision']>, string> = {
+  FULL_REFUND: 'Full refund to the buyer',
+  PARTIAL_REFUND: 'Partial refund to the buyer',
+  RELEASE_TO_SELLER: 'Payout released to the seller',
+};
+
+export interface TariffResolution {
+  country: { code: string; name: string };
+  hsCode: string;
+  matchedHsCode: string;
+  description: string;
+  generalDutyPercent: number | null;
+  caricomDutyPercent: number | null;
+  applicableDutyPercent: number | null;
+  vatPercent: number | null;
+  vatFrom: 'TARIFF' | 'COUNTRY' | null;
+  rateText: string | null;
+  restriction: 'NONE' | 'LICENCE_REQUIRED' | 'PROHIBITED';
+  notes: string | null;
+  varies: boolean;
+  source: { kind: 'TARIFF_SCHEDULE'; name: string; publisher: string; effectiveFrom: string } | { kind: 'IIE_ESTIMATE'; name: string; isPlaceholder: boolean };
 }

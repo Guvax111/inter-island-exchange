@@ -64,17 +64,39 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   await sellerPage.getByLabel('Town / city').fill('Castries');
   await sellerPage.getByRole('button', { name: 'Submit', exact: true }).click();
   await expect(sellerPage.getByText('Your seller application is under review')).toBeVisible();
+  // Proof of business registration (or a national ID) is required.
+  await sellerPage.goto('/dashboard/seller');
+  await sellerPage.getByLabel('Document', { exact: true }).selectOption('BUSINESS_REGISTRATION');
+  await sellerPage.getByLabel(/^File/).setInputFiles(path.join(__dirname, 'fixtures/registration.pdf'));
+  await sellerPage.getByRole('button', { name: 'Upload' }).click();
+  await expect(sellerPage.getByText('Waiting for IIE')).toBeVisible();
 
   // ---- IIE approves the seller and confirms payout setup
   const adminPage = await (await browser.newContext()).newPage();
+  adminPage.on('dialog', (d) => void d.accept());
   await signIn(adminPage, ADMIN.email, ADMIN.password, '/admin/sellers');
   await adminPage.getByRole('button', { name: new RegExp(`Island Baby Supplies ${run} Ltd`) }).click();
+  await adminPage.getByRole('button', { name: 'Accept registration.pdf' }).click();
+  await expect(adminPage.getByText('Accepted', { exact: true })).toBeVisible();
+  await shot(adminPage, 'p6-01-admin-seller-document');
   await adminPage.getByRole('button', { name: 'Approve', exact: true }).click();
   await adminPage.getByRole('button', { name: 'Approved', exact: true }).click();
   await adminPage.getByRole('button', { name: new RegExp(`Island Baby Supplies ${run} Ltd`) }).click();
-  await adminPage.getByLabel('Note').fill('Pilot: payouts by bank transfer, confirmed by phone');
+  await adminPage.getByLabel('Note', { exact: true }).fill('Pilot: payouts by bank transfer, confirmed by phone');
   await adminPage.getByRole('button', { name: 'Confirm payout setup and activate' }).click();
   await expect(adminPage.getByRole('button', { name: 'Suspend seller' })).toBeVisible();
+
+  // ---- IIE imports a tariff schedule for St. Vincent (a test fixture, not official rates) and activates it
+  await adminPage.goto('/admin/tariffs');
+  await adminPage.getByLabel('Schedule name').fill(`E2E tariff fixture ${run}`);
+  await adminPage.getByLabel('Published by (source)').fill('IIE end-to-end test');
+  await adminPage.getByLabel('Countries (single-rate files only)').fill('VC');
+  await adminPage.getByLabel('File', { exact: true }).setInputFiles(path.join(__dirname, 'fixtures/tariff-fixture.csv'));
+  await adminPage.getByRole('button', { name: 'Import as draft' }).click();
+  await expect(adminPage.getByText(`E2E tariff fixture ${run}`)).toBeVisible();
+  await adminPage.getByRole('button', { name: 'Activate' }).first().click();
+  await expect(adminPage.getByText(/St. Vincent and the Grenadines: 2 lines \(active\)/).first()).toBeVisible();
+  await shot(adminPage, 'p6-02-admin-tariffs');
 
   // ---- Seller lists the product
   await sellerPage.goto('/dashboard/seller/products/new');
@@ -83,6 +105,8 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   await sellerPage.getByLabel('Full description').fill('Hypoallergenic disposable diapers with a wetness indicator.');
   await sellerPage.getByLabel('Category').selectOption('diapers-and-wipes');
   await sellerPage.getByLabel('HS code').fill('9619.00');
+  // The seller sees the official description and duties for the countries they ship to.
+  await expect(sellerPage.getByText('Napkins (diapers) and napkin liners for babies')).toBeVisible();
   await sellerPage.getByLabel('Shipping weight (kg)').fill('1.8');
   await sellerPage.getByLabel('Length (cm)').fill('40');
   await sellerPage.getByLabel('Width (cm)').fill('25');
@@ -122,6 +146,8 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   await buyerPage.getByRole('link', { name: new RegExp(productTitle) }).click();
   await expect(buyerPage.getByRole('heading', { name: productTitle })).toBeVisible();
   await expect(buyerPage.getByText('Ships from St. Lucia to St. Vincent and the Grenadines')).toBeVisible();
+  await expect(buyerPage.getByRole('heading', { name: 'Import duties and taxes' })).toBeVisible();
+  await expect(buyerPage.getByText('Napkins (diapers) and napkin liners for babies')).toBeVisible();
   await shot(buyerPage, 'p2-04-product-mobile');
   await buyerPage.getByLabel('Quantity').fill('2');
   await buyerPage.getByRole('button', { name: 'Add to cart' }).click();
@@ -305,5 +331,34 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   await buyerPage.getByRole('button', { name: 'Yes, I received my order' }).click();
   await expect(buyerPage.getByText('Delivery confirmed', { exact: true }).first()).toBeVisible();
   await sellerPage.reload();
-  await expect(sellerPage.getByText(/Delivery confirmed. Your payout is released after the review period/)).toBeVisible();
+  await expect(sellerPage.getByText(/You are paid when the 7-day review period ends/)).toBeVisible();
+
+  // ---- Within the 7-day review the buyer reports a missing pack; the seller answers; IIE refunds one pack
+  await buyerPage.getByRole('button', { name: 'Report a problem' }).click();
+  await buyerPage.getByLabel(/What went wrong/).fill('Only one of the two packs was in the box.');
+  await buyerPage.getByRole('button', { name: 'Send report' }).click();
+  await expect(buyerPage.getByText('Problem reported', { exact: true }).first()).toBeVisible();
+  await sellerPage.reload();
+  await expect(sellerPage.getByText('Problem reported by the buyer').first()).toBeVisible();
+  await sellerPage.getByLabel(/Add a message/).fill('We packed two; one may have been lost in transit. We accept a refund for one pack.');
+  await sellerPage.getByRole('button', { name: 'Send' }).click();
+  await expect(sellerPage.getByText(/We accept a refund for one pack/)).toBeVisible();
+  await adminPage.goto('/admin/disputes');
+  await adminPage.getByRole('button', { name: new RegExp(iieId) }).click();
+  await expect(adminPage.getByText(/We accept a refund for one pack/)).toBeVisible();
+  await adminPage.getByLabel('Partial refund to the buyer').check();
+  await adminPage.getByLabel('Refund amount').fill('45.00');
+  await adminPage.getByLabel('Explanation for the buyer and the seller').fill('One of two packs did not arrive; refunding its price.');
+  await shot(adminPage, 'p6-03-admin-dispute-decision');
+  await adminPage.getByRole('button', { name: 'Record decision' }).click();
+  await expect(adminPage.getByText('IIE decision: Partial refund to the buyer · EC$45.00')).toBeVisible();
+  await buyerPage.reload();
+  await expect(buyerPage.getByText('Partly refunded: EC$45.00')).toBeVisible();
+  await expect(buyerPage.getByText('The buyer keeps the goods.', { exact: true })).toBeVisible();
+  await shot(buyerPage, 'p6-04-buyer-partial-refund-mobile');
+  await sellerPage.goto('/dashboard/seller/payouts');
+  const payout = sellerPage.getByRole('row', { name: new RegExp(iieId) });
+  await expect(payout).toContainText('Paid');
+  await expect(payout).toContainText('EC$45.00');
+  await shot(sellerPage, 'p6-05-seller-payouts');
 });

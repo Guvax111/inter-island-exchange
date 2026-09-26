@@ -1,6 +1,6 @@
 # IIE Payment Architecture
 
-**Status:** Phase 4. Built against a **sandbox provider** until a licensed payment, banking or escrow provider is
+**Status:** Phases 4 and 6. Built against a **sandbox provider** until a licensed payment, banking or escrow provider is
 contracted. No real money moves.
 
 ## Principles
@@ -23,10 +23,11 @@ contracted. No real money moves.
 | Method | Purpose |
 |---|---|
 | `createIntent({ transaction, amount, currency, returnUrl, idempotencyKey })` | Opens a payment at the provider; returns the provider's ID and the hosted-page URL to send the buyer to |
-| `refund({ providerIntentId, amount, currency, reason, idempotencyKey })` | Full refund; returns the provider's refund ID and `SUCCEEDED` or `PENDING` |
+| `refund({ providerIntentId, amount, currency, reason, idempotencyKey })` | Full or partial refund; returns the provider's refund ID and `SUCCEEDED` or `PENDING` |
+| `payout({ reference, amount, currency, sellerReference, idempotencyKey })` | Pays the seller from held funds; `SUCCEEDED` or `PENDING` (then a payout webhook) |
 | `parseWebhook(headers, rawBody)` | Verifies the signature over the raw body and parses the event; throws on anything invalid |
 
-Normalised events: `payment.succeeded`, `payment.failed`, `payment.processing`, `refund.succeeded`, `refund.failed`.
+Normalised events: `payment.succeeded`, `payment.failed`, `payment.processing`, `refund.succeeded`, `refund.failed`, `payout.succeeded`, `payout.failed`.
 
 ### Sandbox provider
 
@@ -114,11 +115,41 @@ Pilot example (2 × EC$45.00 diapers, St. Lucia → St. Vincent, buyer pays the 
 
 If the seller pays the fee instead, the buyer pays EC$145.00 and the seller is owed EC$85.50.
 
-## Payouts
+## Payouts (Phase 6)
 
-A payout row is created **ON_HOLD** when the payment is confirmed and **CANCELLED** on refund. Release to the seller
-(through the provider) comes with delivery confirmation and the dispute window in Phase 6. Administrators with
-`payout.approve` see payouts at *Admin → Payouts*.
+A payout row is created **ON_HOLD** when the payment is confirmed. The seller is paid **7 days after delivery is
+confirmed** (by the buyer, or automatically 3 days after delivery):
+
+```
+DELIVERY_CONFIRMED ─▶ DISPUTE_WINDOW (review_ends_at = +7 days; the buyer can still report a problem)
+  worker, when it ends ─▶ PAYOUT_APPROVED ─▶ PAYOUT_PROCESSING ─ provider.payout() ─▶ COMPLETED
+```
+
+`PaymentProvider.payout` pays the seller out of the funds the provider holds (idempotency key = payout id). When it
+settles at once the transaction completes; otherwise it stays `PAYOUT_PROCESSING` until a `payout.succeeded` or
+`payout.failed` webhook. A failed payout can be retried by IIE (*Admin → Payouts → Retry*, `payout.approve`).
+
+Ledger at payout: `seller_payable` Dr / `provider_held` Cr (payout amount). The IIE fee and the shipping stay in
+`provider_held` until settled with the provider and the logistics partner (settlement recording is Phase 7).
+
+Payouts run on the **sandbox provider** (no real money) until a licensed provider is contracted.
+
+## Disputes and refunds (Phase 6)
+
+A buyer can report a problem from delivery until the review period ends. The payout stays on hold; buyer, seller and
+IIE exchange messages with photo evidence. IIE (`dispute.resolve`) decides:
+
+| Decision | Money | Transaction | Goods |
+|---|---|---|---|
+| Full refund | Whole payment back to the buyer (provider refund); capture posting reversed; payout cancelled | `DISPUTED → REFUNDED` | Returned or kept: decided case by case, with instructions |
+| Partial refund | Amount back to the buyer, **borne by the seller** (at most the payout); ledger `seller_payable` Dr / `provider_held` Cr; payout reduced; the rest paid out at once | `DISPUTED → PARTIALLY_REFUNDED → PAYOUT_APPROVED → … → COMPLETED` | Case by case |
+| Release to seller | Payout paid at once | `DISPUTED → PAYOUT_APPROVED → … → COMPLETED` | Buyer keeps them |
+
+Refund rows use their id as the provider idempotency key. The decision, amount, return instructions and explanation are
+recorded on the dispute, posted to the conversation, audited and emailed to both parties.
+
+**Open point:** after a full refund of a delivered order, the carrier's shipping charge is still owed to the logistics
+partner; who bears it (seller, IIE) is a business decision to make before launch.
 
 ## Exchange rates
 

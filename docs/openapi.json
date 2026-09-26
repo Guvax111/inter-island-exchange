@@ -359,7 +359,16 @@
     "/api/v1/countries": {
       "get": {
         "operationId": "CountriesController_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -2916,6 +2925,29 @@
         ]
       }
     },
+    "/api/v1/admin/payouts/{iieId}/retry": {
+      "post": {
+        "operationId": "AdminPaymentsController_retryPayout",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/payouts": {
       "get": {
         "operationId": "AdminPaymentsController_payoutList",
@@ -2972,6 +3004,20 @@
         },
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/me/payouts": {
+      "get": {
+        "operationId": "SellerPayoutsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
         ]
       }
     },
@@ -3044,39 +3090,6 @@
             }
           }
         ],
-        "responses": {
-          "204": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "buyer"
-        ]
-      }
-    },
-    "/api/v1/me/orders/{iieId}/report-problem": {
-      "post": {
-        "operationId": "BuyerDeliveryController_report",
-        "parameters": [
-          {
-            "name": "iieId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReportProblemDto"
-              }
-            }
-          }
-        },
         "responses": {
           "204": {
             "description": ""
@@ -3468,6 +3481,442 @@
         },
         "tags": [
           "admin"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{iieId}/report-problem": {
+      "post": {
+        "operationId": "DisputesController_report",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportProblemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "disputes"
+        ]
+      }
+    },
+    "/api/v1/disputes/{iieId}": {
+      "get": {
+        "operationId": "DisputesController_view",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "disputes"
+        ]
+      }
+    },
+    "/api/v1/disputes/{iieId}/messages": {
+      "post": {
+        "operationId": "DisputesController_message",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "disputes"
+        ]
+      }
+    },
+    "/api/v1/admin/disputes": {
+      "get": {
+        "operationId": "DisputesController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "OPEN",
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "ALL"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "disputes"
+        ]
+      }
+    },
+    "/api/v1/admin/disputes/{iieId}/decision": {
+      "post": {
+        "operationId": "DisputesController_decide",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisputeDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "disputes"
+        ]
+      }
+    },
+    "/api/v1/tariffs/coverage": {
+      "get": {
+        "operationId": "TariffsController_coverage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "tariffs"
+        ]
+      }
+    },
+    "/api/v1/tariffs/lookup": {
+      "get": {
+        "operationId": "TariffsController_lookup",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "hs",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "tariffs"
+        ]
+      }
+    },
+    "/api/v1/tariffs/search": {
+      "get": {
+        "operationId": "TariffsController_search",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "pattern": "^[A-Z]{2}$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 80,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "tariffs"
+        ]
+      }
+    },
+    "/api/v1/admin/tariffs/imports": {
+      "get": {
+        "operationId": "AdminTariffsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminTariffsController_import",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TariffImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tariffs/imports/{id}": {
+      "get": {
+        "operationId": "AdminTariffsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tariffs/imports/{id}/activate": {
+      "post": {
+        "operationId": "AdminTariffsController_activate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tariffs/imports/{id}/discard": {
+      "post": {
+        "operationId": "AdminTariffsController_discard",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/me/seller/documents": {
+      "get": {
+        "operationId": "SellerDocumentsController_mine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
+        ]
+      },
+      "post": {
+        "operationId": "SellerDocumentsController_upload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SellerDocumentUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
+        ]
+      }
+    },
+    "/api/v1/seller-documents/{id}": {
+      "get": {
+        "operationId": "SellerDocumentsController_download",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
+        ]
+      }
+    },
+    "/api/v1/admin/seller-documents/{id}/review": {
+      "post": {
+        "operationId": "SellerDocumentsController_review",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellerDocumentReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
         ]
       }
     }
@@ -4721,19 +5170,6 @@
           }
         }
       },
-      "ReportProblemDto": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "minLength": 10,
-            "maxLength": 1000
-          }
-        },
-        "required": [
-          "reason"
-        ]
-      },
       "ShipmentStepDto": {
         "type": "object",
         "properties": {
@@ -4933,6 +5369,134 @@
             "nullable": true
           }
         }
+      },
+      "ReportProblemDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "DisputeMessageDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "DisputeDecisionDto": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "FULL_REFUND",
+              "PARTIAL_REFUND",
+              "RELEASE_TO_SELLER"
+            ]
+          },
+          "refundAmount": {
+            "type": "string",
+            "pattern": "^\\d{1,9}(\\.\\d{1,2})?$"
+          },
+          "returnRequired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "returnInstructions": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "note": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "decision",
+          "note"
+        ]
+      },
+      "TariffImportDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 150
+          },
+          "source": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "countryCodes": {
+            "type": "string"
+          },
+          "caricomDefaultPercent": {
+            "default": 0,
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "effectiveFrom"
+        ]
+      },
+      "SellerDocumentUploadDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "BUSINESS_REGISTRATION",
+              "NATIONAL_ID"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "SellerDocumentReviewDto": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "ACCEPT",
+              "REJECT"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "decision"
+        ]
       }
     }
   }

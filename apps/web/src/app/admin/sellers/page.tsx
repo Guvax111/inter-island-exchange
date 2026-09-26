@@ -1,5 +1,7 @@
 'use client';
 
+import { DocumentsReview } from '@/components/seller/verification-documents';
+import type { SellerDocument } from '@/lib/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { DecisionPanel } from '@/components/admin/decision-panel';
@@ -23,6 +25,7 @@ interface Detail {
   user: { email: string; firstName: string; lastName: string; emailVerifiedAt: string | null };
   business: { legalName: string; tradingName: string | null; registrationNumber: string | null; taxId: string | null } | null;
   storefront: { slug: string } | null;
+  documents: SellerDocument[];
 }
 
 const FILTERS = ['UNDER_REVIEW', 'APPROVED', 'ACTIVE', 'DRAFT', 'SUSPENDED', 'REJECTED'];
@@ -113,6 +116,7 @@ export default function AdminSellersPage() {
                 </>
               )}
             </dl>
+            <DocumentsReview documents={d.documents} onChange={refresh} />
             <FormError message={error} />
             {d.seller.status === 'UNDER_REVIEW' && (
               <DecisionPanel

@@ -1,5 +1,6 @@
 'use client';
 
+import { HsHelper } from '@/components/tariffs/hs-helper';
 import { useQuery } from '@tanstack/react-query';
 import { Field, SelectField } from '@/components/forms/field';
 import { Label } from '@/components/ui/label';
@@ -82,6 +83,7 @@ export function ProductFields({ form, onChange, errors }: { form: ProductForm; o
       />
       <Field id="brand" label="Brand (optional)" value={form.brand} onChange={set('brand')} />
       <Field id="hsCode" label="HS code" value={form.hsCode} onChange={set('hsCode')} error={errors.hsCode} hint="Customs tariff code, e.g. 9619.00 for diapers. Ask your customs broker if unsure." />
+      <HsHelper hsCode={form.hsCode} origin={form.countryOfOrigin} originName={countries?.find((c) => c.code === form.countryOfOrigin)?.name} />
       <SelectField
         id="countryOfOrigin"
         label="Country of origin"

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Suspense, useEffect, useState } from 'react';
 import { RequireSignIn } from '@/components/account/require-signin';
 import { FormError } from '@/components/forms/field';
+import { formatHs } from '@/components/tariffs/tariff-card';
 import { CostBreakdown } from '@/components/orders/cost-breakdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -101,6 +102,14 @@ function Checkout() {
                   <li key={l.sku} className="flex justify-between gap-4 py-2">
                     <span>
                       {l.quantity} × {l.title} <span className="text-muted-foreground">({l.variantName})</span>
+                      {l.tariff && (
+                        <span className="block text-xs text-muted-foreground">
+                          HS {formatHs(l.tariff.hsCode)} · {l.tariff.description}
+                          {l.tariff.dutyPercent !== null && ` · duty ${l.tariff.dutyPercent}%`}
+                          {l.tariff.vatPercent !== null && ` · VAT ${l.tariff.vatPercent}%`} · {l.tariff.kind === 'TARIFF_SCHEDULE' ? l.tariff.source : 'IIE estimate'}
+                          {l.tariff.restriction === 'LICENCE_REQUIRED' && ' · import licence required'}
+                        </span>
+                      )}
                     </span>
                     <span className="font-medium">{l.lineTotal.formatted}</span>
                   </li>

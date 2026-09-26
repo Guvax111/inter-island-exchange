@@ -7,6 +7,7 @@ import { CheckCircle2, Circle } from 'lucide-react';
 import { StatusBadge } from '@/components/marketplace/status-badge';
 import { Field, FormError } from '@/components/forms/field';
 import { useMySeller, type MySeller } from '@/components/seller/use-seller';
+import { VerificationDocuments } from '@/components/seller/verification-documents';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, ApiError, errorMessage } from '@/lib/api';
@@ -46,6 +47,7 @@ export default function SellerOverviewPage() {
         {profile.reviewNotes && <p className="mt-2 text-sm font-medium">Note from IIE: {profile.reviewNotes}</p>}
       </div>
       {profile.status === 'DRAFT' && profile.reviewNotes && <ResubmitForm profile={profile} />}
+      <VerificationDocuments />
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>

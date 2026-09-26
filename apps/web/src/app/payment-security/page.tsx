@@ -17,6 +17,7 @@ export default function PaymentSecurityPage() {
       <ul className="mt-2 list-disc space-y-2 pl-6 text-muted-foreground">
         <li>You pay on the payment partner&apos;s own secure page. Your card details never reach IIE.</li>
         <li>The seller has 48 hours to confirm they can supply your order. If they decline or do not answer, you are refunded in full automatically.</li>
+        <li>The seller is paid 7 days after you confirm delivery. Until then you can report a problem; IIE reviews it and can refund you in full or in part.</li>
         <li>Import duties and taxes shown at checkout are an estimate. They are not collected by IIE; you pay them on arrival, based on customs&apos; own assessment.</li>
         <li>Every payment, refund and payout is recorded in a ledger that cannot be edited, under your order&apos;s IIE transaction ID.</li>
       </ul>

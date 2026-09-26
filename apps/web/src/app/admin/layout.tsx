@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/admin/transactions', label: 'Transactions', permission: 'transaction.read.any' },
+  { href: '/admin/disputes', label: 'Disputes', permission: 'transaction.read.any' },
+  { href: '/admin/tariffs', label: 'Tariffs', permission: 'config.manage' },
   { href: '/admin/logistics', label: 'Logistics', permission: 'partner.manage' },
   { href: '/admin/payouts', label: 'Payouts', permission: 'payout.approve' },
   { href: '/admin/users', label: 'Users', permission: 'user.read.any' },
