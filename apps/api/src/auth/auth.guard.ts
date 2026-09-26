@@ -10,7 +10,7 @@ import { safeEqual } from '../common/crypto';
 import { AppError, Errors } from '../common/errors';
 import { Principal } from '../rbac/principal';
 import { RbacService } from '../rbac/rbac.service';
-import { IS_PUBLIC, REQUIRE_ACTIVE, REQUIRED_PERMISSIONS } from './decorators';
+import { IGNORE_SESSION, IS_PUBLIC, REQUIRE_ACTIVE, REQUIRED_PERMISSIONS } from './decorators';
 import { SESSION_COOKIE, SessionService } from './session.service';
 import { HttpStatus } from '@nestjs/common';
 
@@ -43,6 +43,8 @@ export class AuthGuard implements CanActivate {
       const origin = req.header('origin');
       if (origin && !this.config.allowedOrigins.includes(origin)) throw Errors.forbidden('Request origin not allowed');
     }
+
+    if (this.reflector.getAllAndOverride<boolean>(IGNORE_SESSION, targets)) return true;
 
     const token: string | undefined = req.cookies?.[SESSION_COOKIE];
     const principal = token ? await this.buildPrincipal(token) : null;

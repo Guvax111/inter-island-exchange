@@ -144,16 +144,50 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   const iieId = buyerPage.url().split('/').pop()!;
   await expect(buyerPage.getByRole('heading', { name: iieId })).toBeVisible();
   await expect(buyerPage.getByText(/Waiting for payment · items reserved/)).toBeVisible();
-  await expect(buyerPage.getByRole('button', { name: 'Pay now — coming soon' })).toBeDisabled();
   await shot(buyerPage, 'p3-02-order-mobile');
 
-  // ---- Seller sees the new order; IIE sees the transaction and its event log
+  // ---- Seller sees the unpaid order: nothing to do yet
   await sellerPage.goto('/dashboard/seller/orders');
   await expect(sellerPage.getByText(iieId)).toBeVisible();
   await sellerPage.getByText(iieId).click();
   await expect(sellerPage.getByText('Waiting for the buyer to pay. Do not prepare or ship yet.')).toBeVisible();
+
+  // ---- Buyer pays on the sandbox payment page: first the card is declined, then the retry succeeds
+  await buyerPage.getByRole('button', { name: 'Pay EC$149.50' }).click();
+  await expect(buyerPage.getByText('SANDBOX PAYMENT PAGE · NO REAL MONEY')).toBeVisible();
+  await expect(buyerPage.getByText('EC$149.50 XCD')).toBeVisible();
+  await shot(buyerPage, 'p4-01-sandbox-payment-page');
+  await buyerPage.getByRole('button', { name: 'Decline the card' }).click();
+  await buyerPage.waitForURL(/\?payment=decline$/);
+  await expect(buyerPage.getByText(/Payment did not go through/)).toBeVisible();
+  await shot(buyerPage, 'p4-02-payment-declined');
+  await buyerPage.getByRole('button', { name: 'Try again' }).click();
+  await buyerPage.getByRole('button', { name: 'Pay successfully' }).click();
+  await buyerPage.waitForURL(/\?payment=succeed$/);
+  await expect(buyerPage.getByText('Paid · waiting for the seller to confirm')).toBeVisible();
+  await expect(buyerPage.getByText(/The seller has 48 hours to confirm/)).toBeVisible();
+  await shot(buyerPage, 'p4-03-paid-mobile');
+
+  // ---- Seller confirms within 48 hours
+  await sellerPage.reload();
+  await expect(sellerPage.getByText(/The buyer has paid/)).toBeVisible();
+  await expect(sellerPage.getByText(/Confirm within 48 hours of payment: 4[78] h/)).toBeVisible();
+  await shot(sellerPage, 'p4-04-seller-confirm');
+  await sellerPage.getByRole('button', { name: 'Confirm order' }).click();
+  await expect(sellerPage.getByText(/You confirmed this order/)).toBeVisible();
+  await buyerPage.goto(`/orders/${iieId}`);
+  await expect(buyerPage.getByText('The seller confirmed your order')).toBeVisible();
+
+  // ---- IIE sees the transaction, its event log and the balanced money trail; the payout is on hold
   await adminPage.goto('/admin/transactions');
   await adminPage.getByRole('button', { name: iieId }).click();
   await expect(adminPage.getByText(/CREATED → AWAITING_PAYMENT by SYSTEM/)).toBeVisible();
-  await shot(adminPage, 'p3-03-admin-transaction');
+  await expect(adminPage.getByText(/AWAITING_SELLER_CONFIRMATION → SELLER_CONFIRMED by SELLER/)).toBeVisible();
+  await expect(adminPage.getByText('· ledger balanced')).toBeVisible();
+  await expect(adminPage.getByText('EC$149.50 Dr')).toBeVisible();
+  await shot(adminPage, 'p4-05-admin-money-trail');
+  await adminPage.goto('/admin/payouts');
+  const payoutRow = adminPage.getByRole('row', { name: new RegExp(iieId) });
+  await expect(payoutRow).toContainText('on hold');
+  await expect(payoutRow).toContainText('EC$90.00');
 });

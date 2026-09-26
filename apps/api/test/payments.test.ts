@@ -37,9 +37,11 @@ async function payOnSandbox(buyer: Client, iieId: string, outcome: 'SUCCEED' | '
   const { redirectUrl } = (await buyer.post(`/me/orders/${iieId}/pay`)).body;
   const url = new URL(redirectUrl);
   const token = url.searchParams.get('token')!;
-  const page = await http().get(url.pathname + url.search);
+  const page = await buyer.agent.get(url.pathname + url.search);
   expect(page.status).toBe(200);
-  const res = await http().post(url.pathname).type('form').send({ outcome, token });
+  expect(page.headers['referrer-policy']).toBe('same-origin');
+  // As a browser posts the form: with the buyer's session cookie and the site's origin, but no CSRF header.
+  const res = await buyer.agent.post(url.pathname).set('origin', url.origin).type('form').send({ outcome, token });
   return { res, page, url, token };
 }
 

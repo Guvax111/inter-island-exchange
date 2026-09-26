@@ -209,7 +209,6 @@ export class PaymentsService {
     });
   }
 
-  /** Paid orders the seller did not confirm in time are refunded in full. Safe to run in several workers. */
   /**
    * Refunds paid orders the seller did not confirm in time. Each order is refunded in its own
    * database transaction, so one failure is logged and retried next tick without blocking the rest.

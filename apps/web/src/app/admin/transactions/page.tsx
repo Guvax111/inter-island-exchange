@@ -6,13 +6,14 @@ import { CostBreakdown } from '@/components/orders/cost-breakdown';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import type { OrderDetail, OrderSummary } from '@/lib/types';
+import type { MoneyTrail, OrderDetail, OrderSummary } from '@/lib/types';
 
 export default function AdminTransactionsPage() {
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const list = useQuery({ queryKey: ['admin-tx', q], queryFn: () => api<{ items: OrderSummary[]; total: number }>(`/admin/transactions?pageSize=100${q ? `&q=${encodeURIComponent(q)}` : ''}`) });
   const detail = useQuery({ queryKey: ['admin-tx-detail', selected], enabled: !!selected, queryFn: () => api<OrderDetail & { version: number }>(`/admin/transactions/${selected}`) });
+  const money = useQuery({ queryKey: ['admin-tx-money', selected], enabled: !!selected, queryFn: () => api<MoneyTrail>(`/admin/transactions/${selected}/money`) });
   const d = detail.data;
   return (
     <div className="space-y-4">
@@ -68,9 +69,79 @@ export default function AdminTransactionsPage() {
                 </li>
               ))}
             </ul>
+            {money.data && <MoneySection m={money.data} />}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+const ACCOUNT_LABELS: Record<string, string> = {
+  provider_held: 'Held by payment provider',
+  seller_payable: 'Owed to seller',
+  iie_fee_revenue: 'IIE fee',
+  logistics_payable: 'Owed to logistics partner',
+};
+
+function MoneySection({ m }: { m: MoneyTrail }) {
+  return (
+    <section className="space-y-3">
+      <h3 className="font-semibold">
+        Money trail{' '}
+        <span className={m.balanced ? 'text-palm-700' : 'text-red-600'}>{m.balanced ? '· ledger balanced' : '· LEDGER UNBALANCED'}</span>
+      </h3>
+      {m.payments.length === 0 && m.ledger.length === 0 ? (
+        <p className="text-muted-foreground">No payment yet.</p>
+      ) : (
+        <>
+          <dl className="grid grid-cols-[180px_1fr] gap-1">
+            {Object.entries(m.balances).map(([account, b]) => (
+              <div key={account} className="contents">
+                <dt className="text-muted-foreground">{ACCOUNT_LABELS[account] ?? account}</dt>
+                <dd>{b.side === 'NONE' ? '—' : `${b.formatted} ${b.side === 'DEBIT' ? 'Dr' : 'Cr'}`}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Payment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {m.payments.map((p) => (
+                  <TableRow key={p.providerIntentId}>
+                    <TableCell className="font-mono text-xs">{p.provider} · {p.providerIntentId}</TableCell>
+                    <TableCell>{p.status}</TableCell>
+                    <TableCell className="text-right">{p.amount.formatted}</TableCell>
+                  </TableRow>
+                ))}
+                {m.refunds.map((r, i) => (
+                  <TableRow key={`r${i}`}>
+                    <TableCell className="text-xs">Refund by {r.requestedBy.toLowerCase()} · {r.reason}</TableCell>
+                    <TableCell>{r.status}</TableCell>
+                    <TableCell className="text-right">−{r.amount.formatted}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <details>
+            <summary className="cursor-pointer text-muted-foreground">Ledger entries ({m.ledger.length})</summary>
+            <ul className="mt-2 space-y-1 rounded-lg border p-3 font-mono text-xs">
+              {m.ledger.map((e, i) => (
+                <li key={i}>
+                  {new Date(e.at).toLocaleString()} {e.direction === 'DEBIT' ? 'Dr' : 'Cr'} {e.account} {e.amount.formatted} · {e.description}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </>
+      )}
+    </section>
   );
 }

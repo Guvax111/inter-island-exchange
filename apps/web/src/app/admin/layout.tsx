@@ -8,12 +8,14 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/admin/transactions', label: 'Transactions', permission: 'transaction.read.any' },
+  { href: '/admin/payouts', label: 'Payouts', permission: 'payout.approve' },
   { href: '/admin/users', label: 'Users', permission: 'user.read.any' },
   { href: '/admin/sellers', label: 'Sellers', permission: 'seller.review' },
   { href: '/admin/products', label: 'Products', permission: 'product.review' },
   { href: '/admin/categories', label: 'Categories', permission: 'category.manage' },
   { href: '/admin/countries', label: 'Countries', permission: 'country.manage' },
   { href: '/admin/checkout-settings', label: 'Checkout settings', permission: 'config.manage' },
+  { href: '/admin/exchange-rates', label: 'Exchange rates', permission: 'config.manage' },
   { href: '/admin/audit', label: 'Audit log', permission: 'audit.read' },
 ];
 

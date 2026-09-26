@@ -9,7 +9,7 @@ product records; no static or fake product data in production workflows.
 
 The Phase 0 audit of the previous repository (`Guvax111/lockeys-oasis-website`) is kept in that repository.
 
-Status after Phase 3. Every control below is clearly labelled; none pretends to work.
+Status after Phase 4. Every control below is clearly labelled; none pretends to work.
 
 | # | Page | Component | Mock functionality | Recommended fix | Implementation status |
 |---|---|---|---|---|---|
@@ -20,18 +20,19 @@ Status after Phase 3. Every control below is clearly labelled; none pretends to 
 | 5 | `/contact` | Contact page | — | — | **Done:** IIE's address, email and phone (also in the footer) |
 | 6 | Home, `/track` | "Track a Shipment" card | Tracking not built | Shipment tracking | Labelled **Coming soon** (Phase 5) |
 | 7 | Home | "Shop the Marketplace" card | — | — | **Done (Phase 2)** |
-| 8 | `/how-it-works` | Step list | Steps 5–8 not built | Build per roadmap | Each step badged **Available now** or **Coming soon** |
+| 8 | `/how-it-works` | Step list | Steps 6–8 not built | Build per roadmap | Each step badged **Available now**, **Test mode** (payment) or **Coming soon** |
 | 9 | `/[country]` | "Shipping and logistics partners" | No partners yet | Phase 5 | Text says they will be listed there. (Local sellers and products are **live** since Phase 2) |
-| 10 | `/payment-security` | Transaction Safeguard section | No payment partner yet | Phase 4 | States payments are not live yet |
+| 10 | `/payment-security` | Transaction Safeguard section | Payments run on the sandbox provider | Contract a licensed provider and add its adapter | Labelled **Test mode**: states no real money moves |
 | 11 | `/cart`, `/checkout` | Checkout | — | — | **Done (Phase 3):** real quote and order placement |
-| 14 | `/orders/{iieId}` | "Pay now — coming soon" button | Payments not connected | Phase 4 (licensed payment partner) | **Disabled** and labelled; the page explains unpaid orders are cancelled after 30 minutes without charge |
+| 14 | `/orders/{iieId}` | "Pay EC$…" button | — (sandbox provider until one is contracted) | Licensed provider adapter | **Done (Phase 4):** opens the provider's hosted page. The sandbox page is headed "SANDBOX PAYMENT PAGE · NO REAL MONEY"; production refuses to start with the sandbox provider |
+| 15 | `/admin/payouts` | Payout list | Payout release not built | Phase 6 (delivery confirmation) | Read-only; the page states payouts stay on hold until release arrives |
 | 12 | `/dashboard/buyer` | Orders card | — | — | **Done (Phase 3):** links to real orders |
 | 13 | `/seller/{slug}` | Rating / completed orders | No completed orders or reviews yet | Phases 6 and 7 | Shows "New seller on IIE"; no fake ratings |
 
 Working, not mock: sign-up, email verification, login (with two-step verification), password reset and change,
 signed-in devices, onboarding, account deletion request, `/countries`, every country page, marketplace search,
 product pages, storefronts, cart, saved items, addresses, seller dashboard (store, products, photos, stock),
-checkout, order placement with IIE transaction IDs, order pages and timelines, seller orders, notifications,
+checkout, order placement with IIE transaction IDs, payment (sandbox provider), seller confirm/decline with the 48-hour automatic refund, admin money trail and exchange rates, order pages and timelines, seller orders, notifications,
 admin users, transactions, checkout settings, seller and product review queues, categories, countries and lanes,
 audit log. Every product card
 links to a real product record; there is no static product data.

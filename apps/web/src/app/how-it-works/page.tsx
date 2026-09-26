@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 
 export const metadata = { title: 'How It Works' };
 
-const steps: { title: string; text: string; live: boolean }[] = [
+const steps: { title: string; text: string; live: boolean | 'test' }[] = [
   { title: 'Register and verify', text: 'Create a buyer or seller account in your country and confirm your email.', live: true },
   { title: 'Seller review', text: 'IIE reviews each seller before they can open a storefront.', live: true },
   { title: 'List and discover products', text: 'Sellers list products after IIE review; buyers search across CARICOM and fill a cart.', live: true },
-  { title: 'Checkout', text: 'See product cost, shipping, duties and taxes, and fees before you pay.', live: false },
-  { title: 'Payment held safely', text: 'A licensed payment partner holds the payment while your order ships.', live: false },
+  { title: 'Checkout', text: 'See product cost, shipping, duties and taxes, and fees before you pay.', live: true },
+  { title: 'Payment held safely', text: 'A licensed payment partner holds the payment while your order ships. The seller has 48 hours to confirm, or you are refunded automatically.', live: 'test' },
   { title: 'Shipping and customs', text: 'Logistics partners collect, export, clear customs and deliver. Track every step.', live: false },
   { title: 'Confirm delivery', text: 'You confirm your order arrived. A short review window lets you report a problem.', live: false },
   { title: 'Seller paid', text: 'The payment is released to the seller and the transaction is complete.', live: false },
@@ -27,7 +27,7 @@ export default function HowItWorksPage() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-semibold">{step.title}</h2>
-                <Badge variant={step.live ? 'default' : 'secondary'}>{step.live ? 'Available now' : 'Coming soon'}</Badge>
+                <Badge variant={step.live === true ? 'default' : 'secondary'}>{step.live === true ? 'Available now' : step.live === 'test' ? 'Test mode' : 'Coming soon'}</Badge>
               </div>
               <p className="mt-1 text-muted-foreground">{step.text}</p>
             </div>

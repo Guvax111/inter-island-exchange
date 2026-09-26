@@ -13,7 +13,7 @@ import { requestMeta } from '../common/request';
 import { safeEqual } from '../common/crypto';
 import type { Principal } from '../rbac/principal';
 import { CurrentPrincipal } from '../auth/current-principal.decorator';
-import { Public, RequireActiveAccount, RequirePermissions } from '../auth/decorators';
+import { IgnoreSession, RequireActiveAccount, RequirePermissions } from '../auth/decorators';
 import { FxService } from './fx.service';
 import { LedgerService } from './ledger.service';
 import { PAYMENT_PROVIDER, PaymentProvider, SandboxPaymentProvider } from './payment.provider';
@@ -53,7 +53,7 @@ export class PaymentActionsController {
 export class PaymentWebhooksController {
   constructor(private readonly payments: PaymentsService) {}
 
-  @Public()
+  @IgnoreSession()
   @Post(':provider')
   @HttpCode(200)
   receive(@Param('provider') provider: string, @Req() req: RawBodyRequest<Request>) {
@@ -97,7 +97,7 @@ export class SandboxPaymentController {
     return { sandbox, ...row };
   }
 
-  @Public()
+  @IgnoreSession()
   @Get(':id')
   async page(@Param('id') id: string, @Query('token') token: string | undefined, @Res() res: Response) {
     const { intent, iieId, store, currency } = await this.load(id, token);
@@ -106,6 +106,8 @@ export class SandboxPaymentController {
     const button = (outcome: string, label: string, colour: string) =>
       `<form method="post" action="/api/v1/sandbox-pay/${esc(id)}"><input type="hidden" name="token" value="${esc(token!)}"><input type="hidden" name="outcome" value="${outcome}"><button style="width:100%;padding:14px;margin-top:10px;border:0;border-radius:8px;background:${colour};color:#fff;font-size:16px">${label}</button></form>`;
     res.setHeader('Cache-Control', 'no-store');
+    // Helmet's default no-referrer makes browsers send "Origin: null" on the form post, which the origin check refuses.
+    res.setHeader('Referrer-Policy', 'same-origin');
     res.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sandbox payment</title></head>
 <body style="font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:16px">
 <div style="max-width:420px;margin:24px auto;background:#fff;border-radius:12px;padding:24px;border:3px dashed #f97316">
@@ -117,7 +119,7 @@ ${open ? button('SUCCEED', 'Pay successfully', '#3d8a1a') + button('DECLINE', 'D
 </div></body></html>`);
   }
 
-  @Public()
+  @IgnoreSession()
   @Post(':id')
   async complete(@Param('id') id: string, @Body() body: unknown, @Res() res: Response) {
     const parsed = sandboxOutcomeSchema.safeParse(body);

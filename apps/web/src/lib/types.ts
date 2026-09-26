@@ -160,6 +160,8 @@ export interface OrderDetail {
   subStatuses: Record<string, string>;
   paymentDueAt: string | null;
   canCancel: boolean;
+  canPay: boolean;
+  sellerConfirmDueAt: string | null;
   seller: { name: string; slug: string };
   buyer: { firstName: string; lastName?: string; email?: string };
   deliveryAddress: Record<string, string | null>;
@@ -181,4 +183,13 @@ export interface OrderDetail {
 export interface NotificationList {
   unread: number;
   items: { id: string; title: string; body: string; link: string | null; readAt: string | null; createdAt: string }[];
+}
+
+export interface MoneyTrail {
+  balanced: boolean;
+  ledger: { posting: string; account: string; direction: 'DEBIT' | 'CREDIT'; amount: Money; description: string; at: string }[];
+  balances: Record<string, Money & { side: 'DEBIT' | 'CREDIT' | 'NONE' }>;
+  payments: { provider: string; providerIntentId: string; status: string; amount: Money; createdAt: string }[];
+  refunds: { status: string; amount: Money; reason: string; requestedBy: string; providerRefundId: string | null; createdAt: string }[];
+  events: { type: string; amount: Money | null; at: string }[];
 }
