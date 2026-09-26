@@ -34,6 +34,7 @@ import { isPublicStatus } from '../catalog/visibility';
 import type { Principal } from '../rbac/principal';
 import { price } from './pricing';
 import { TransactionEngine } from './transaction-engine';
+import { FxService } from '../payments/fx.service';
 
 /** Everything frozen into a quote. Stored as JSON (bigints as strings) and copied into the order. */
 export interface QuoteSnapshot {
@@ -76,6 +77,7 @@ export class CheckoutService {
     @Inject(DB) private readonly db: Database,
     private readonly engine: TransactionEngine,
     private readonly audit: AuditService,
+    private readonly fx: FxService,
   ) {}
 
   async quote(principal: Principal, sellerSlug: string, addressId: string) {
@@ -282,6 +284,8 @@ export class CheckoutService {
         })),
       );
 
+      // Buyer and seller currencies are the same on the pilot lane; the rate used is stored and never recomputed.
+      const fx = await this.fx.rate(quote.currencyCode, quote.currencyCode);
       const [{ n }] = (await tx.execute<{ n: string }>(sql`select nextval('transaction_number_seq')::text as n`)).rows as [{ n: string }];
       const iieId = `IIE-${snap.origin.iieCode}-${snap.destination.iieCode}-${n.padStart(6, '0')}`;
       const [created] = await tx
@@ -297,6 +301,9 @@ export class CheckoutService {
           transactionCurrency: quote.currencyCode,
           buyerCurrency: quote.currencyCode,
           payoutCurrency: quote.currencyCode,
+          fxRate: fx.rate,
+          fxSource: fx.source,
+          fxRecordedAt: fx.at,
           subtotalMinor: BigInt(snap.subtotalMinor),
           shippingMinor: BigInt(snap.shipping.priceMinor),
           platformFeeMinor: BigInt(snap.fee.amountMinor),

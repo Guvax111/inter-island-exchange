@@ -111,7 +111,7 @@ export class OrdersService {
       const due = await tx
         .select({ id: transactions.id, iieId: transactions.iieId })
         .from(transactions)
-        .where(and(eq(transactions.status, 'AWAITING_PAYMENT'), lte(transactions.paymentDueAt, now)))
+        .where(and(inArray(transactions.status, ['AWAITING_PAYMENT', 'PAYMENT_FAILED']), lte(transactions.paymentDueAt, now)))
         .limit(limit)
         .for('update', { skipLocked: true });
       for (const t of due) {
@@ -196,8 +196,10 @@ export class OrdersService {
         dispute: t.disputeStatus,
         payout: t.payoutStatus,
       },
-      paymentDueAt: t.status === 'AWAITING_PAYMENT' ? t.paymentDueAt : null,
-      canCancel: view === 'BUYER' && t.status === 'AWAITING_PAYMENT',
+      paymentDueAt: ['AWAITING_PAYMENT', 'PAYMENT_FAILED'].includes(t.status) ? t.paymentDueAt : null,
+      canCancel: view === 'BUYER' && ['AWAITING_PAYMENT', 'PAYMENT_FAILED'].includes(t.status),
+      canPay: view === 'BUYER' && ['AWAITING_PAYMENT', 'PAYMENT_FAILED'].includes(t.status) && !!t.paymentDueAt && t.paymentDueAt > new Date(),
+      sellerConfirmDueAt: t.status === 'AWAITING_SELLER_CONFIRMATION' ? t.sellerConfirmDueAt : null,
       seller: { name: store?.displayName, slug: store?.slug },
       buyer: view === 'SELLER' ? { firstName: buyer!.firstName } : buyer,
       // Sellers see where the order is going; the full address is shared with the logistics partner (Phase 5).

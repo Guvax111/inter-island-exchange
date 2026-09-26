@@ -60,7 +60,7 @@ export async function createTestApp(overrides: Record<string, string> = {}): Pro
   const email = new SandboxEmailProvider(false);
   const storage = new MemoryStorage();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(config, { emailProvider: email, storageProvider: storage })] }).compile();
-  const app = moduleRef.createNestApplication({ logger: false });
+  const app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   configureApp(app, config);
   await app.init();
   const { db, pool } = createDatabase(TEST_DATABASE_URL);

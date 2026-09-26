@@ -1,8 +1,8 @@
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { PERMISSIONS, ROLE_DEFINITIONS, ROLES } from '@iie/shared';
 import { createDatabase, Database } from './db';
-import { categories, countries, currencies, dutyEstimates, feeRules, hsCodes, laneShippingRates, lanes, permissions, rolePermissions, roles } from './schema';
-import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_DUTY_ESTIMATES, SEED_FEE_RULE, SEED_HS_CODES, SEED_LANES, SEED_SHIPPING_RATES } from './seed-data';
+import { categories, countries, currencies, dutyEstimates, exchangeRates, feeRules, hsCodes, laneShippingRates, lanes, permissions, rolePermissions, roles } from './schema';
+import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_DUTY_ESTIMATES, SEED_EXCHANGE_RATES, SEED_FEE_RULE, SEED_HS_CODES, SEED_LANES, SEED_SHIPPING_RATES } from './seed-data';
 
 /** Makes the roles/permissions tables match the catalogue in @iie/shared. */
 export async function syncRbac(db: Database): Promise<void> {
@@ -90,6 +90,8 @@ async function seedCheckoutConfig(db: Database): Promise<void> {
       })),
     );
   }
+  const [anyRate] = await db.select({ id: exchangeRates.id }).from(exchangeRates).limit(1);
+  if (!anyRate) await db.insert(exchangeRates).values(SEED_EXCHANGE_RATES);
   for (const d of SEED_DUTY_ESTIMATES) {
     const { destination, ...rest } = d;
     await db.insert(dutyEstimates).values({ destinationCountryId: byIso.get(destination)!.id, ...rest, isPlaceholder: true }).onConflictDoNothing();

@@ -9,7 +9,7 @@ import { OutboxPoller } from './outbox/outbox.poller';
 
 async function main() {
   const config = loadConfig();
-  const app = await NestFactory.create(AppModule.forRoot(config));
+  const app = await NestFactory.create(AppModule.forRoot(config), { rawBody: true });
   configureApp(app, config);
   if (config.APP_ENV !== 'production') {
     SwaggerModule.setup(`${API_PREFIX}/docs`, app, buildOpenApiDocument(app));

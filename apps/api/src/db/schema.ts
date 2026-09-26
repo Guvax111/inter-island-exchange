@@ -711,6 +711,8 @@ export const transactions = pgTable(
     /** What the seller will receive once the transaction completes. */
     sellerPayoutMinor: bigint('seller_payout_minor', { mode: 'bigint' }).notNull(),
     paymentDueAt: timestamp('payment_due_at', { withTimezone: true }),
+    /** Deadline for the seller to confirm a paid order; after it the order is refunded automatically. */
+    sellerConfirmDueAt: timestamp('seller_confirm_due_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -720,6 +722,7 @@ export const transactions = pgTable(
     index('transactions_buyer_idx').on(t.buyerUserId, t.createdAt),
     index('transactions_seller_idx').on(t.sellerProfileId, t.createdAt),
     index('transactions_payment_due_idx').on(t.paymentDueAt).where(sql`status = 'AWAITING_PAYMENT'`),
+    index('transactions_seller_due_idx').on(t.sellerConfirmDueAt).where(sql`status = 'AWAITING_SELLER_CONFIRMATION'`),
   ],
 );
 
@@ -771,4 +774,152 @@ export const notifications = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('notifications_user_idx').on(t.userId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------- Phase 4: payments, refunds, payouts, ledger, FX
+
+/**
+ * One attempt to collect a transaction's total through a payment provider. Card data never reaches IIE:
+ * the buyer pays on the provider's hosted page and the provider reports back by signed webhook.
+ */
+export const paymentIntents = pgTable(
+  'payment_intents',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    provider: varchar('provider', { length: 40 }).notNull(),
+    providerIntentId: varchar('provider_intent_id', { length: 120 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    status: varchar('status', { length: 20 }).notNull().default('REQUIRES_ACTION'),
+    redirectUrl: text('redirect_url').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('payment_intents_provider_uq').on(t.provider, t.providerIntentId),
+    check('payment_intents_status_chk', inList('status', ['REQUIRES_ACTION', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])),
+    index('payment_intents_tx_idx').on(t.transactionId),
+  ],
+);
+
+/** Append-only history of what the provider reported for each intent. */
+export const paymentEvents = pgTable(
+  'payment_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    paymentIntentId: uuid('payment_intent_id').notNull().references(() => paymentIntents.id),
+    type: varchar('type', { length: 60 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }),
+    currencyCode: char('currency_code', { length: 3 }),
+    webhookId: uuid('webhook_id'),
+    detail: jsonb('detail').notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index('payment_events_intent_idx').on(t.paymentIntentId, t.id)],
+);
+
+/** Every webhook exactly as received, stored before processing. Unique per provider event: duplicates are ignored. */
+export const providerWebhooks = pgTable(
+  'provider_webhooks',
+  {
+    id: id(),
+    provider: varchar('provider', { length: 40 }).notNull(),
+    eventId: varchar('event_id', { length: 120 }).notNull(),
+    eventType: varchar('event_type', { length: 60 }).notNull(),
+    payload: jsonb('payload').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    result: varchar('result', { length: 40 }),
+    error: text('error'),
+  },
+  (t) => [unique('provider_webhooks_event_uq').on(t.provider, t.eventId)],
+);
+
+export const refunds = pgTable(
+  'refunds',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    paymentIntentId: uuid('payment_intent_id').notNull().references(() => paymentIntents.id),
+    provider: varchar('provider', { length: 40 }).notNull(),
+    providerRefundId: varchar('provider_refund_id', { length: 120 }),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    reason: text('reason').notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('PENDING'),
+    requestedBy: varchar('requested_by', { length: 20 }).notNull(),
+    createdAt: createdAt(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => [
+    check('refunds_status_chk', inList('status', ['PENDING', 'SUCCEEDED', 'FAILED'])),
+    check('refunds_amount_chk', sql`${t.amountMinor} > 0`),
+    index('refunds_tx_idx').on(t.transactionId),
+  ],
+);
+
+/**
+ * What IIE owes each seller per transaction. Created when payment is confirmed (ON_HOLD); released after delivery
+ * and the review period (Phases 5-6) through the payment partner, or recorded manually during the pilot.
+ */
+export const payouts = pgTable(
+  'payouts',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().unique().references(() => transactions.id),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    status: varchar('status', { length: 20 }).notNull().default('ON_HOLD'),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    providerPayoutId: varchar('provider_payout_id', { length: 120 }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('payouts_status_chk', inList('status', ['ON_HOLD', 'APPROVED', 'PROCESSING', 'PAID', 'CANCELLED'])),
+    index('payouts_seller_idx').on(t.sellerProfileId, t.status),
+  ],
+);
+
+/**
+ * Double-entry ledger (append-only). Every posting is a group of lines whose debits equal credits.
+ * Accounts: provider_held (money held by the licensed payment partner), seller_payable, iie_fee_revenue,
+ * logistics_payable.
+ */
+export const ledgerEntries = pgTable(
+  'ledger_entries',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    postingId: uuid('posting_id').notNull(),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    account: varchar('account', { length: 40 }).notNull(),
+    direction: varchar('direction', { length: 6 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    description: varchar('description', { length: 200 }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('ledger_direction_chk', inList('direction', ['DEBIT', 'CREDIT'])),
+    check('ledger_amount_chk', sql`${t.amountMinor} >= 0`),
+    index('ledger_tx_idx').on(t.transactionId, t.id),
+    index('ledger_posting_idx').on(t.postingId),
+  ],
+);
+
+/** Append-only exchange rates. Transactions keep the rate they used; nothing is recomputed with a newer rate. */
+export const exchangeRates = pgTable(
+  'exchange_rates',
+  {
+    id: id(),
+    baseCurrency: char('base_currency', { length: 3 }).notNull().references(() => currencies.code),
+    quoteCurrency: char('quote_currency', { length: 3 }).notNull().references(() => currencies.code),
+    rate: numeric('rate', { precision: 18, scale: 8 }).notNull(),
+    source: varchar('source', { length: 60 }).notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('exchange_rates_pair_idx').on(t.baseCurrency, t.quoteCurrency, t.effectiveAt)],
 );

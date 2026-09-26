@@ -45,6 +45,11 @@ import { CheckoutService } from './transactions/checkout.service';
 import { CheckoutSettingsService } from './transactions/checkout-settings.service';
 import { OrdersService } from './transactions/orders.service';
 import { AdminTransactionsController, BuyerOrdersController, NotificationsController, SellerOrdersController } from './transactions/transactions.controllers';
+import { createPaymentProvider, PAYMENT_PROVIDER, type PaymentProvider } from './payments/payment.provider';
+import { PaymentsService } from './payments/payments.service';
+import { LedgerService } from './payments/ledger.service';
+import { FxService } from './payments/fx.service';
+import { AdminPaymentsController, PaymentActionsController, PaymentWebhooksController, SandboxPaymentController } from './payments/payments.controllers';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 class PoolShutdown implements OnApplicationShutdown {
@@ -58,6 +63,7 @@ export interface AppModuleOptions {
   /** Tests inject a SandboxEmailProvider to read sent messages. */
   emailProvider?: EmailProvider;
   storageProvider?: StorageProvider;
+  paymentProvider?: PaymentProvider;
 }
 
 /**
@@ -104,6 +110,10 @@ export class AppModule {
         SellerOrdersController,
         NotificationsController,
         AdminTransactionsController,
+        PaymentActionsController,
+        PaymentWebhooksController,
+        SandboxPaymentController,
+        AdminPaymentsController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -112,6 +122,7 @@ export class AppModule {
         { provide: EMAIL_PROVIDER, useValue: options.emailProvider ?? createEmailProvider(config) },
         { provide: STORAGE_PROVIDER, useValue: options.storageProvider ?? createStorageProvider(config) },
         { provide: PRODUCT_SEARCH, useClass: PostgresProductSearch },
+        { provide: PAYMENT_PROVIDER, useValue: options.paymentProvider ?? createPaymentProvider(config) },
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
@@ -141,6 +152,9 @@ export class AppModule {
         CheckoutService,
         CheckoutSettingsService,
         OrdersService,
+        PaymentsService,
+        LedgerService,
+        FxService,
       ],
     };
   }

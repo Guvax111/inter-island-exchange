@@ -43,6 +43,20 @@
       "when": 1790388001803,
       "tag": "0005_transaction_sequence_and_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790391227652,
+      "tag": "0006_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790391228509,
+      "tag": "0007_payments_append_only",
+      "breakpoints": true
     }
   ]
 }

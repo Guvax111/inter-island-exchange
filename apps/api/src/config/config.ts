@@ -38,6 +38,10 @@ const envSchema = z
     STORAGE_PROVIDER: z.enum(['local']).default('local'),
     MEDIA_LOCAL_DIR: z.string().default('.media'),
     MAX_UPLOAD_MB: z.coerce.number().min(1).max(20).default(8),
+    /** Payment provider. Only the sandbox exists until IIE contracts a licensed provider. */
+    PAYMENT_PROVIDER: z.enum(['sandbox']).default('sandbox'),
+    /** Signs sandbox webhooks and hosted-page links. Required outside local/test. */
+    SANDBOX_PAYMENT_SECRET: z.string().min(16).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.EMAIL_PROVIDER === 'smtp') {
@@ -45,9 +49,15 @@ const envSchema = z
         if (!env[key]) ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when EMAIL_PROVIDER=smtp` });
       }
     }
+    if (env.PAYMENT_PROVIDER === 'sandbox' && !env.SANDBOX_PAYMENT_SECRET && !['local', 'test'].includes(env.APP_ENV)) {
+      ctx.addIssue({ code: 'custom', path: ['SANDBOX_PAYMENT_SECRET'], message: 'Required in staging' });
+    }
     if (env.APP_ENV === 'production') {
       if (env.EMAIL_PROVIDER === 'sandbox') {
         ctx.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'Sandbox providers are not allowed in production' });
+      }
+      if (env.PAYMENT_PROVIDER === 'sandbox') {
+        ctx.addIssue({ code: 'custom', path: ['PAYMENT_PROVIDER'], message: 'The sandbox payment provider is not allowed in production' });
       }
       if (env.STORAGE_PROVIDER === 'local') {
         ctx.addIssue({ code: 'custom', path: ['STORAGE_PROVIDER'], message: 'Local disk storage is not allowed in production; configure object storage' });

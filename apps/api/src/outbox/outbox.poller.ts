@@ -1,11 +1,13 @@
 import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { OrdersService } from '../transactions/orders.service';
+import { PaymentsService } from '../payments/payments.service';
 import { OutboxService } from './outbox.service';
 
 /**
  * Background jobs run by the worker (or in-process locally): deliver outbox events and cancel orders whose
- * payment window has expired. Each job is safe to run in several processes at once.
+ * payment window has expired, and refund paid orders the seller did not confirm in time. Each job is safe to run
+ * in several processes at once.
  */
 @Injectable()
 export class OutboxPoller implements OnApplicationShutdown {
@@ -16,12 +18,14 @@ export class OutboxPoller implements OnApplicationShutdown {
   constructor(
     private readonly outbox: OutboxService,
     private readonly orders: OrdersService,
+    private readonly payments: PaymentsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   /** One pass of every job. */
   async tick(): Promise<void> {
     await this.orders.expireOverdue();
+    await this.payments.refundUnconfirmed();
     while ((await this.outbox.processBatch()) > 0) {
       // keep draining while there is work
     }

@@ -2,6 +2,8 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import {
   addressCreateSchema,
+  declineSaleSchema,
+  exchangeRateSchema,
   adminTransactionQuerySchema,
   cancelOrderSchema,
   checkoutQuoteSchema,
@@ -109,3 +111,7 @@ export class FeeRuleUpdateDto extends createZodDto(feeRuleUpdateSchema) {}
 export class DutyEstimateDto extends createZodDto(dutyEstimateSchema) {}
 export class DutyEstimateUpdateDto extends createZodDto(dutyEstimateUpdateSchema) {}
 export class MarkReadDto extends createZodDto(z.object({ ids: z.array(z.uuid()).max(100).default([]) })) {}
+
+// Phase 4
+export class DeclineSaleDto extends createZodDto(declineSaleSchema) {}
+export class ExchangeRateDto extends createZodDto(exchangeRateSchema) {}

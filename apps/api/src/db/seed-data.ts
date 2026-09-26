@@ -86,3 +86,14 @@ export const SEED_DUTY_ESTIMATES = [
     notes: 'Pilot estimate: 0% duty on CARICOM-origin goods, 20% placeholder on other origins, 16% VAT on value plus shipping plus duty. Confirm with a customs broker.',
   },
 ];
+
+/**
+ * Reference exchange rates: fixed central-bank pegs (1 USD = 2.70 XCD, ECCB; 1 USD = 2.00 BBD, Central Bank of
+ * Barbados). Floating currencies (TTD, JMD, GYD) need a rate feed or administrator entries before they are used.
+ */
+export const SEED_EXCHANGE_RATES = [
+  { baseCurrency: 'USD', quoteCurrency: 'XCD', rate: '2.70000000', source: 'ECCB_PEG' },
+  { baseCurrency: 'XCD', quoteCurrency: 'USD', rate: '0.37037037', source: 'ECCB_PEG' },
+  { baseCurrency: 'USD', quoteCurrency: 'BBD', rate: '2.00000000', source: 'CBB_PEG' },
+  { baseCurrency: 'BBD', quoteCurrency: 'USD', rate: '0.50000000', source: 'CBB_PEG' },
+];

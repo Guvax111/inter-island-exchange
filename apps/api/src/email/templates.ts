@@ -72,6 +72,8 @@ export const templates = {
     ),
   orderCancelled: (to: string, firstName: string, iieId: string, reason: string, url: string) =>
     render(to, `Order ${iieId} cancelled`, [`Hi ${firstName},`, reason, 'You have not been charged.'], { label: 'View order', url }),
+  transactionUpdate: (to: string, firstName: string, subject: string, message: string, url: string) =>
+    render(to, subject, [`Hi ${firstName},`, message], { label: 'View order', url }),
   accountSuspended: (to: string, firstName: string) =>
     render(to, 'Your account has been suspended', [
       `Hi ${firstName},`,

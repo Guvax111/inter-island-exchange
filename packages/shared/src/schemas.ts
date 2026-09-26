@@ -306,3 +306,15 @@ export const adminTransactionQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
+
+// ------------------------------------------------------------------ Phase 4: payments
+
+export const declineSaleSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+export const sandboxOutcomeSchema = z.object({ outcome: z.enum(['SUCCEED', 'DECLINE', 'PROCESSING']), token: z.string().min(20).max(200) });
+export const exchangeRateSchema = z.object({
+  base: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  quote: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/),
+  /** Units of `quote` per 1 `base`, e.g. "2.70". */
+  rate: z.string().trim().regex(/^\d{1,9}(\.\d{1,8})?$/),
+  source: z.string().trim().min(2).max(60),
+});

@@ -87,3 +87,11 @@ export type FeePayer = (typeof FEE_PAYERS)[number];
 export const PAYMENT_WINDOW_MINUTES = 30;
 /** Minutes a checkout quote stays valid. */
 export const QUOTE_VALID_MINUTES = 15;
+
+// ------------------------------------------------------------------ Phase 4: payments
+
+/** Hours a seller has to confirm a paid order before it is refunded automatically. */
+export const SELLER_CONFIRMATION_HOURS = 48;
+
+export const PAYMENT_INTENT_STATUSES = ['REQUIRES_ACTION', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
+export type PaymentIntentStatus = (typeof PAYMENT_INTENT_STATUSES)[number];

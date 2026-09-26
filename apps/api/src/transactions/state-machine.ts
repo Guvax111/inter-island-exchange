@@ -39,6 +39,8 @@ export const TRANSITIONS: Rules = {
   PARTIALLY_REFUNDED: { PAYOUT_APPROVED: ['ADMIN', 'SYSTEM'] },
   CUSTOMS_HOLD: { REFUNDED: ['ADMIN'] },
   COMPLIANCE_HOLD: { REFUNDED: ['ADMIN'], CANCELLED: ['ADMIN'] },
+  // A payment that arrives after the order was cancelled is refunded automatically.
+  CANCELLED: { REFUNDED: ['SYSTEM'] },
   PAYOUT_APPROVED: { PAYOUT_PROCESSING: ['SYSTEM', 'PAYMENT'] },
   PAYOUT_PROCESSING: { COMPLETED: ['PAYMENT', 'SYSTEM'] },
 };
@@ -74,7 +76,8 @@ const COMPLIANCE_HOLDABLE: readonly TransactionStatus[] = [
 export function allowedActors(from: TransactionStatus, to: TransactionStatus, heldFrom: TransactionStatus | null): readonly ActorType[] {
   const direct = TRANSITIONS[from]?.[to];
   if (direct) return direct;
-  if (to === 'COMPLIANCE_HOLD' && COMPLIANCE_HOLDABLE.includes(from)) return ['COMPLIANCE', 'ADMIN'];
+  // SYSTEM places automatic holds (e.g. a payment amount that does not match the order).
+  if (to === 'COMPLIANCE_HOLD' && COMPLIANCE_HOLDABLE.includes(from)) return ['COMPLIANCE', 'ADMIN', 'SYSTEM'];
   if (HOLD_STATES.includes(from) && heldFrom && to === heldFrom) return RELEASE_HOLD_ACTORS[from] ?? [];
   return [];
 }
