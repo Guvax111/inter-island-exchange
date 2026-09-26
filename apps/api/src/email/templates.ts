@@ -74,6 +74,26 @@ export const templates = {
     render(to, `Order ${iieId} cancelled`, [`Hi ${firstName},`, reason, 'You have not been charged.'], { label: 'View order', url }),
   transactionUpdate: (to: string, firstName: string, subject: string, message: string, url: string) =>
     render(to, subject, [`Hi ${firstName},`, message], { label: 'View order', url }),
+  partnerInvited: (to: string, firstName: string, partnerName: string, url: string) =>
+    render(
+      to,
+      `You have been added to ${partnerName} on Inter-Island Exchange`,
+      [
+        `Hi ${firstName},`,
+        `Inter-Island Exchange has given you access to the IIE partner portal for ${partnerName}, where you see and update the shipments assigned to ${partnerName}.`,
+        'Choose your password to get started. This link expires in 72 hours. If you were not expecting this, ignore this email.',
+      ],
+      { label: 'Choose your password', url },
+    ),
+  partnerMemberAdded: (to: string, firstName: string, partnerName: string, url: string) =>
+    render(
+      to,
+      `You have been added to ${partnerName} on Inter-Island Exchange`,
+      [`Hi ${firstName},`, `You can now see and update the shipments assigned to ${partnerName} in the IIE partner portal. Sign in with your existing IIE account.`],
+      { label: 'Open the partner portal', url },
+    ),
+  partnerUpdate: (to: string, firstName: string, subject: string, message: string, url: string) =>
+    render(to, subject, [`Hi ${firstName},`, message], { label: 'Open shipment', url }),
   accountSuspended: (to: string, firstName: string) =>
     render(to, 'Your account has been suspended', [
       `Hi ${firstName},`,

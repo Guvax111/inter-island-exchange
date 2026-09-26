@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, FEE_PAYERS, MAX_CART_QUANTITY, PARTY_TYPES, PRODUCT_STATUSES, TRANSACTION_STATUSES } from './statuses';
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, FEE_PAYERS, MAX_CART_QUANTITY, PARTNER_KINDS, PARTY_TYPES, PRODUCT_STATUSES, TRANSACTION_STATUSES } from './statuses';
 import { ROLES } from './rbac';
 
 export const PASSWORD_MIN_LENGTH = 12;
@@ -318,3 +318,88 @@ export const exchangeRateSchema = z.object({
   rate: z.string().trim().regex(/^\d{1,9}(\.\d{1,8})?$/),
   source: z.string().trim().min(2).max(60),
 });
+
+// ------------------------------------------------------------------ Phase 5: logistics
+
+const noteSchema = z.string().trim().max(500).optional();
+const locationSchema = z.string().trim().max(120).optional();
+const gramsSchema = z.coerce.number().int().min(1).max(1_000_000);
+
+export const partnerCreateSchema = z.object({
+  kind: z.enum(PARTNER_KINDS),
+  name: z.string().trim().min(2).max(120),
+  /** Home country. A customs broker clears customs in this country. */
+  countryCode: countryCodeSchema,
+  contactEmail: emailSchema,
+  contactPhone: phoneSchema,
+  /** Logistics partners only: true if they clear customs themselves; otherwise the destination's broker does. */
+  clearsCustoms: z.boolean().default(false),
+});
+export const partnerUpdateSchema = z
+  .object({ name: z.string().trim().min(2).max(120), contactEmail: emailSchema, contactPhone: phoneSchema, clearsCustoms: z.boolean(), active: z.boolean() })
+  .partial();
+export const partnerLaneSchema = z.object({ origin: countryCodeSchema, destination: countryCodeSchema });
+export const partnerMemberInviteSchema = z.object({
+  email: emailSchema,
+  firstName: z.string().trim().min(1).max(100),
+  lastName: z.string().trim().min(1).max(100),
+});
+export const shipmentAssignSchema = z.object({
+  logisticsPartnerId: z.uuid().nullable().optional(),
+  customsBrokerId: z.uuid().nullable().optional(),
+});
+
+/** Seller: the parcel is packed and can be collected. */
+export const readyForPickupSchema = z.object({
+  /** Packed weight; defaults to the weight declared at checkout. */
+  parcelWeightGrams: gramsSchema.optional(),
+  pickupNotes: noteSchema,
+});
+
+export const SHIPMENT_STEPS = [
+  'SCHEDULE_PICKUP',
+  'PICKED_UP',
+  'EXPORT_PROCESSING',
+  'IN_TRANSIT',
+  'ARRIVED_DESTINATION',
+  'CUSTOMS_PROCESSING',
+  'CUSTOMS_CLEARED',
+  'CUSTOMS_HOLD',
+  'CUSTOMS_RELEASED',
+  'OUT_FOR_DELIVERY',
+] as const;
+export type ShipmentStep = (typeof SHIPMENT_STEPS)[number];
+
+/** One tracking update from a logistics partner or customs broker. Delivery has its own form (proof of delivery). */
+export const shipmentStepSchema = z
+  .object({
+    step: z.enum(SHIPMENT_STEPS),
+    note: noteSchema,
+    location: locationSchema,
+    /** SCHEDULE_PICKUP */
+    pickupAt: z.coerce.date().optional(),
+    /** PICKED_UP: weight measured at pickup */
+    actualWeightGrams: gramsSchema.optional(),
+    /** Partner's own reference (waybill, manifest) */
+    trackingReference: z.string().trim().max(60).optional(),
+    /** CUSTOMS_CLEARED */
+    customsEntryNumber: z.string().trim().max(60).optional(),
+    /** CUSTOMS_CLEARED: duties and taxes customs assessed, paid by the buyer on arrival, e.g. "23.20" */
+    dutiesAssessed: priceInputSchema.optional(),
+    /** CUSTOMS_HOLD */
+    reason: z.string().trim().min(3).max(500).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.step === 'SCHEDULE_PICKUP' && !v.pickupAt) ctx.addIssue({ code: 'custom', path: ['pickupAt'], message: 'Choose the pickup date and time' });
+    if (v.step === 'PICKED_UP' && !v.actualWeightGrams) ctx.addIssue({ code: 'custom', path: ['actualWeightGrams'], message: 'Enter the weight measured at pickup' });
+    if (v.step === 'CUSTOMS_HOLD' && !v.reason) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'Say why customs is holding the parcel' });
+  });
+
+/** Proof of delivery. Recipient name and time are required; photo and signature are optional uploads. */
+export const deliveryProofSchema = z.object({
+  recipientName: z.string().trim().min(2).max(120),
+  deliveredAt: z.coerce.date(),
+  note: noteSchema,
+});
+
+export const reportProblemSchema = z.object({ reason: z.string().trim().min(10).max(1000) });

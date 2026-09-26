@@ -64,6 +64,20 @@
       "when": 1790427269893,
       "tag": "0008_exchange_rates_no_truncate",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790438450617,
+      "tag": "0009_logistics",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790438468013,
+      "tag": "0010_logistics_append_only",
+      "breakpoints": true
     }
   ]
 }

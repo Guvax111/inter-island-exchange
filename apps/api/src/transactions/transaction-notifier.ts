@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { formatMinor, PAYMENT_WINDOW_MINUTES, SELLER_CONFIRMATION_HOURS, type TransactionStatus } from '@iie/shared';
+import { DELIVERY_CONFIRMATION_DAYS, formatMinor, PAYMENT_WINDOW_MINUTES, SELLER_CONFIRMATION_HOURS, type TransactionStatus } from '@iie/shared';
 import type { Tx } from '../db/db';
 import { currencies, sellerProfiles, transactions, users } from '../db/schema';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -11,7 +11,7 @@ type TransactionRow = typeof transactions.$inferSelect;
 
 /**
  * Turns transaction events into notifications for the buyer and seller (in-app, plus email via the outbox).
- * Later phases add payment, shipping, customs, delivery, dispute and payout messages here.
+ * Emails go out for the moments that need attention; other steps are in-app only.
  */
 @Injectable()
 export class TransactionNotifier {
@@ -57,6 +57,45 @@ export class TransactionNotifier {
       case 'REFUNDED':
         await toBuyer('order.refunded', `Order ${t.iieId} refunded`, `Your payment of ${total} is being returned to you by the payment partner.`, true);
         await toSeller('sale.refunded', `Order ${t.iieId} refunded`, 'The buyer has been refunded. Nothing to ship.');
+        return;
+      case 'PREPARING_SHIPMENT':
+        await toBuyer('order.packed', `${t.iieId} is packed`, 'The seller has packed your order and it is waiting for the logistics partner to collect it.');
+        return;
+      case 'PICKUP_SCHEDULED':
+        await toBuyer('order.pickup_scheduled', `Pickup scheduled for ${t.iieId}`, 'The logistics partner has scheduled the collection from the seller.');
+        return;
+      case 'PICKED_UP':
+        await toBuyer('order.shipped', `${t.iieId} has shipped`, 'The logistics partner has collected your order from the seller. Follow its progress on the order page.', true);
+        return;
+      case 'ARRIVED_DESTINATION':
+        await toBuyer('order.arrived', `${t.iieId} has arrived in your country`, 'Your order has arrived and goes through customs next.');
+        return;
+      case 'CUSTOMS_HOLD':
+        await toBuyer('order.customs_hold', `${t.iieId} is held by customs`, 'Customs is holding your parcel. The customs broker is dealing with it and we will keep you informed.', true);
+        await toSeller('sale.customs_hold', `${t.iieId} is held by customs`, 'Customs in the destination country is holding the parcel. IIE may contact you for documents.');
+        return;
+      case 'CUSTOMS_CLEARED':
+        await toBuyer('order.customs_cleared', `${t.iieId} cleared customs`, 'Your order has cleared customs. Any duties and taxes are paid on arrival, as shown on your order.');
+        return;
+      case 'OUT_FOR_DELIVERY':
+        await toBuyer('order.out_for_delivery', `${t.iieId} is out for delivery`, 'Your order is on its way to you today. Have any duties and taxes ready to pay on arrival.', true);
+        return;
+      case 'DELIVERED':
+        await toBuyer(
+          'order.delivered',
+          `${t.iieId} was delivered`,
+          `Please confirm you received your order, or report a problem, within ${DELIVERY_CONFIRMATION_DAYS} days. If we do not hear from you, the delivery is confirmed automatically.`,
+          true,
+        );
+        await toSeller('sale.delivered', `${t.iieId} was delivered`, 'The buyer received the order. Your payout follows after the review period.');
+        return;
+      case 'DELIVERY_CONFIRMED':
+        await toBuyer('order.delivery_confirmed', `Delivery of ${t.iieId} confirmed`, 'Thank you. The delivery is confirmed.');
+        await toSeller('sale.delivery_confirmed', `Delivery of ${t.iieId} confirmed`, 'The delivery is confirmed. Your payout is released after the review period.', true);
+        return;
+      case 'DISPUTED':
+        await toBuyer('order.problem_reported', `We received your report about ${t.iieId}`, 'IIE will look into it and contact you. Your payment stays held until it is resolved.', true);
+        await toSeller('sale.problem_reported', `The buyer reported a problem with ${t.iieId}`, 'IIE will look into it and may contact you. The payout stays on hold until it is resolved.', true);
         return;
       case 'COMPLIANCE_HOLD':
         await toBuyer('order.on_hold', `Order ${t.iieId} is on hold`, 'IIE is reviewing this order. We will contact you if we need anything.');

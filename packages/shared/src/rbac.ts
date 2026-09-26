@@ -38,6 +38,7 @@ export const PERMISSIONS = [
   'payout.approve',
   'config.manage',
   'category.manage',
+  'partner.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

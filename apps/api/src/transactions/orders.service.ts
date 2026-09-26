@@ -22,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import type { Principal } from '../rbac/principal';
 import { STATUS_LABELS } from './state-machine';
 import { TransactionEngine } from './transaction-engine';
+import { ShipmentsService } from '../logistics/shipments.service';
 
 type TransactionRow = typeof transactions.$inferSelect;
 type View = 'BUYER' | 'SELLER' | 'ADMIN';
@@ -34,6 +35,7 @@ export class OrdersService {
     @Inject(DB) private readonly db: Database,
     private readonly engine: TransactionEngine,
     private readonly audit: AuditService,
+    private readonly shipments: ShipmentsService,
   ) {}
 
   // ------------------------------------------------------------------ reads
@@ -200,9 +202,12 @@ export class OrdersService {
       canCancel: view === 'BUYER' && ['AWAITING_PAYMENT', 'PAYMENT_FAILED'].includes(t.status),
       canPay: view === 'BUYER' && ['AWAITING_PAYMENT', 'PAYMENT_FAILED'].includes(t.status) && !!t.paymentDueAt && t.paymentDueAt > new Date(),
       sellerConfirmDueAt: t.status === 'AWAITING_SELLER_CONFIRMATION' ? t.sellerConfirmDueAt : null,
+      canMarkReady: view === 'SELLER' && t.status === 'SELLER_CONFIRMED',
+      canConfirmDelivery: view === 'BUYER' && t.status === 'DELIVERED',
+      deliveryConfirmDueAt: t.status === 'DELIVERED' ? t.deliveryConfirmDueAt : null,
       seller: { name: store?.displayName, slug: store?.slug },
       buyer: view === 'SELLER' ? { firstName: buyer!.firstName } : buyer,
-      // Sellers see where the order is going; the full address is shared with the logistics partner (Phase 5).
+      // Sellers see where the order is going; the full address goes to the logistics partner only.
       deliveryAddress: view === 'SELLER' ? { city: address.city, country: address.country } : address,
       items: items.map((i) => ({
         sku: i.sku,
@@ -231,6 +236,7 @@ export class OrdersService {
         reason: e.reason,
         ...(view === 'ADMIN' ? { from: e.fromStatus, actorType: e.actorType, actorUserId: e.actorUserId, metadata: e.metadata } : {}),
       })),
+      ...(await this.shipments.shipmentView(t, view)),
       createdAt: t.createdAt,
       ...(view === 'ADMIN' ? { version: t.version, id: t.id } : {}),
     };

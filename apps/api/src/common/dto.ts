@@ -4,6 +4,15 @@ import {
   addressCreateSchema,
   declineSaleSchema,
   exchangeRateSchema,
+  deliveryProofSchema,
+  partnerCreateSchema,
+  partnerLaneSchema,
+  partnerMemberInviteSchema,
+  partnerUpdateSchema,
+  readyForPickupSchema,
+  reportProblemSchema,
+  shipmentAssignSchema,
+  shipmentStepSchema,
   adminTransactionQuerySchema,
   cancelOrderSchema,
   checkoutQuoteSchema,
@@ -115,3 +124,15 @@ export class MarkReadDto extends createZodDto(z.object({ ids: z.array(z.uuid()).
 // Phase 4
 export class DeclineSaleDto extends createZodDto(declineSaleSchema) {}
 export class ExchangeRateDto extends createZodDto(exchangeRateSchema) {}
+
+// Phase 5
+export class PartnerCreateDto extends createZodDto(partnerCreateSchema) {}
+export class PartnerUpdateDto extends createZodDto(partnerUpdateSchema) {}
+export class PartnerLaneDto extends createZodDto(partnerLaneSchema) {}
+export class PartnerMemberInviteDto extends createZodDto(partnerMemberInviteSchema) {}
+export class ShipmentAssignDto extends createZodDto(shipmentAssignSchema) {}
+export class ReadyForPickupDto extends createZodDto(readyForPickupSchema) {}
+export class ShipmentStepDto extends createZodDto(shipmentStepSchema) {}
+export class DeliveryProofDto extends createZodDto(deliveryProofSchema) {}
+export class ReportProblemDto extends createZodDto(reportProblemSchema) {}
+export class AdminShipmentQueryDto extends createZodDto(z.object({ view: z.enum(['attention', 'all']).default('attention') })) {}

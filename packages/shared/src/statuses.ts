@@ -95,3 +95,15 @@ export const SELLER_CONFIRMATION_HOURS = 48;
 
 export const PAYMENT_INTENT_STATUSES = ['REQUIRES_ACTION', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'CANCELLED'] as const;
 export type PaymentIntentStatus = (typeof PAYMENT_INTENT_STATUSES)[number];
+
+// ------------------------------------------------------------------ Phase 5: logistics
+
+/** Days after delivery before an order the buyer has not confirmed (or reported a problem with) is confirmed automatically. */
+export const DELIVERY_CONFIRMATION_DAYS = 3;
+
+/** Organisations IIE works with to move goods. Configured by IIE; none is hard-coded. */
+export const PARTNER_KINDS = ['LOGISTICS', 'CUSTOMS_BROKER'] as const;
+export type PartnerKind = (typeof PARTNER_KINDS)[number];
+
+/** A parcel weighed at pickup more than this share above the declared weight is flagged to IIE. */
+export const WEIGHT_TOLERANCE_PERCENT = 10;

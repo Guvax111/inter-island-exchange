@@ -363,7 +363,7 @@ export const mediaAssets = pgTable(
     bytes: integer('bytes').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [check('media_assets_kind_chk', inList('kind', ['PRODUCT_IMAGE', 'STORE_LOGO'])), index('media_assets_owner_idx').on(t.ownerUserId)],
+  (t) => [check('media_assets_kind_chk', inList('kind', ['PRODUCT_IMAGE', 'STORE_LOGO', 'DELIVERY_PHOTO', 'DELIVERY_SIGNATURE'])), index('media_assets_owner_idx').on(t.ownerUserId)],
 );
 
 export const sellerStorefronts = pgTable('seller_storefronts', {
@@ -713,6 +713,8 @@ export const transactions = pgTable(
     paymentDueAt: timestamp('payment_due_at', { withTimezone: true }),
     /** Deadline for the seller to confirm a paid order; after it the order is refunded automatically. */
     sellerConfirmDueAt: timestamp('seller_confirm_due_at', { withTimezone: true }),
+    /** After delivery: when the order is confirmed automatically if the buyer has not confirmed or reported a problem. */
+    deliveryConfirmDueAt: timestamp('delivery_confirm_due_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -723,6 +725,7 @@ export const transactions = pgTable(
     index('transactions_seller_idx').on(t.sellerProfileId, t.createdAt),
     index('transactions_payment_due_idx').on(t.paymentDueAt).where(sql`status = 'AWAITING_PAYMENT'`),
     index('transactions_seller_due_idx').on(t.sellerConfirmDueAt).where(sql`status = 'AWAITING_SELLER_CONFIRMATION'`),
+    index('transactions_delivery_due_idx').on(t.deliveryConfirmDueAt).where(sql`status = 'DELIVERED'`),
   ],
 );
 
@@ -923,3 +926,124 @@ export const exchangeRates = pgTable(
   },
   (t) => [index('exchange_rates_pair_idx').on(t.baseCurrency, t.quoteCurrency, t.effectiveAt)],
 );
+
+// ---------------------------------------------------------------- Phase 5: logistics
+
+/**
+ * Organisations IIE works with to move goods: logistics partners (carriers) and customs brokers. Configured by
+ * IIE administrators; the platform never hard-codes a company. Their staff use the IIE partner portal.
+ */
+export const servicePartners = pgTable(
+  'service_partners',
+  {
+    id: id(),
+    kind: varchar('kind', { length: 20 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    /** Home country. A customs broker clears customs in this country. */
+    countryId: uuid('country_id').notNull().references(() => countries.id),
+    contactEmail: varchar('contact_email', { length: 254 }).notNull(),
+    contactPhone: varchar('contact_phone', { length: 20 }).notNull(),
+    /** Logistics partners: true if they clear customs themselves; otherwise the destination country's broker does. */
+    clearsCustoms: boolean('clears_customs').notNull().default(false),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check('service_partners_kind_chk', inList('kind', ['LOGISTICS', 'CUSTOMS_BROKER'])), index('service_partners_kind_country_idx').on(t.kind, t.countryId)],
+);
+
+/** Partner staff. Membership decides which shipments a partner user can see and update. */
+export const partnerMembers = pgTable(
+  'partner_members',
+  {
+    id: id(),
+    partnerId: uuid('partner_id').notNull().references(() => servicePartners.id),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    addedBy: uuid('added_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('partner_members_uq').on(t.partnerId, t.userId), index('partner_members_user_idx').on(t.userId)],
+);
+
+/** Trade lanes a logistics partner serves. */
+export const partnerLanes = pgTable(
+  'partner_lanes',
+  {
+    id: id(),
+    partnerId: uuid('partner_id').notNull().references(() => servicePartners.id),
+    laneId: uuid('lane_id').notNull().references(() => lanes.id),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [unique('partner_lanes_uq').on(t.partnerId, t.laneId), index('partner_lanes_lane_idx').on(t.laneId)],
+);
+
+/** One shipment per transaction, created when the seller marks the order ready for pickup. */
+export const shipments = pgTable(
+  'shipments',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().unique().references(() => transactions.id),
+    /** Null until IIE has a partner for the lane (or assigns one). */
+    logisticsPartnerId: uuid('logistics_partner_id').references(() => servicePartners.id),
+    /** Set when the logistics partner does not clear customs itself. */
+    customsBrokerId: uuid('customs_broker_id').references(() => servicePartners.id),
+    pickupAddress: jsonb('pickup_address').$type<Record<string, string | null>>().notNull(),
+    pickupContact: jsonb('pickup_contact').$type<{ name: string; phone: string | null }>().notNull(),
+    deliveryAddress: jsonb('delivery_address').$type<Record<string, string | null>>().notNull(),
+    deliveryContact: jsonb('delivery_contact').$type<{ name: string; phone: string | null }>().notNull(),
+    /** Weight used for the shipping price at checkout. */
+    declaredWeightGrams: integer('declared_weight_grams').notNull(),
+    /** Packed weight given by the seller. */
+    parcelWeightGrams: integer('parcel_weight_grams').notNull(),
+    /** Weight measured by the partner at pickup. */
+    actualWeightGrams: integer('actual_weight_grams'),
+    weightFlagged: boolean('weight_flagged').notNull().default(false),
+    pickupNotes: text('pickup_notes').notNull().default(''),
+    pickupScheduledFor: timestamp('pickup_scheduled_for', { withTimezone: true }),
+    pickedUpAt: timestamp('picked_up_at', { withTimezone: true }),
+    trackingReference: varchar('tracking_reference', { length: 60 }),
+    customsEntryNumber: varchar('customs_entry_number', { length: 60 }),
+    /** Duties and taxes assessed by customs, paid by the buyer on arrival (not collected by IIE). */
+    dutiesAssessedMinor: bigint('duties_assessed_minor', { mode: 'bigint' }),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('shipments_weights_chk', sql`${t.declaredWeightGrams} > 0 and ${t.parcelWeightGrams} > 0`),
+    index('shipments_logistics_idx').on(t.logisticsPartnerId),
+    index('shipments_broker_idx').on(t.customsBrokerId),
+  ],
+);
+
+/** Append-only tracking history: every update by a partner, broker, seller or IIE, with location and note. */
+export const shipmentEvents = pgTable(
+  'shipment_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    shipmentId: uuid('shipment_id').notNull().references(() => shipments.id),
+    step: varchar('step', { length: 40 }).notNull(),
+    actorType: varchar('actor_type', { length: 20 }).notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    partnerId: uuid('partner_id').references(() => servicePartners.id),
+    location: varchar('location', { length: 120 }),
+    note: text('note'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('shipment_events_shipment_idx').on(t.shipmentId, t.id)],
+);
+
+/** Proof of delivery (append-only). Recipient name and time required; photo and signature optional. */
+export const deliveryProofs = pgTable('delivery_proofs', {
+  id: id(),
+  shipmentId: uuid('shipment_id').notNull().unique().references(() => shipments.id),
+  recipientName: varchar('recipient_name', { length: 120 }).notNull(),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }).notNull(),
+  photoMediaId: uuid('photo_media_id').references(() => mediaAssets.id),
+  signatureMediaId: uuid('signature_media_id').references(() => mediaAssets.id),
+  note: text('note'),
+  recordedBy: uuid('recorded_by').notNull().references(() => users.id),
+  createdAt: createdAt(),
+});

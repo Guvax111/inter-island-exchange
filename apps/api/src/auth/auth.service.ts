@@ -23,6 +23,8 @@ export const MAX_FAILED_LOGINS = 10;
 export const LOCKOUT_MINUTES = 15;
 const EMAIL_TOKEN_HOURS = 24;
 const RESET_TOKEN_HOURS = 1;
+/** Invitations for partner staff (set-your-password links) last longer than a reset. */
+const INVITE_TOKEN_HOURS = 72;
 
 type TokenPurpose = 'EMAIL_VERIFY' | 'PASSWORD_RESET';
 
@@ -176,7 +178,8 @@ export class AuthService {
       const row = await this.consumeToken(tx, token, 'PASSWORD_RESET');
       const [user] = await tx
         .update(users)
-        .set({ passwordHash, failedLoginCount: 0, lockedUntil: null, updatedAt: new Date() })
+        // Receiving the link proves the address, which is how invited partner staff verify their email.
+        .set({ passwordHash, failedLoginCount: 0, lockedUntil: null, emailVerifiedAt: sql`coalesce(${users.emailVerifiedAt}, now())`, updatedAt: new Date() })
         .where(eq(users.id, row.userId))
         .returning();
       const revoked = await this.sessions.revokeAllForUser(tx, user!.id);
@@ -276,6 +279,11 @@ export class AuthService {
   }
 
   /** Creates a single-use token, invalidating earlier unused tokens of the same purpose. Returns the raw token. */
+  /** Set-your-password link for a person IIE invited (partner staff). Uses the password-reset flow. */
+  issueInviteToken(tx: Tx, userId: string): Promise<string> {
+    return this.issueToken(tx, userId, 'PASSWORD_RESET', INVITE_TOKEN_HOURS);
+  }
+
   private async issueToken(tx: Tx, userId: string, purpose: TokenPurpose, ttlHours: number): Promise<string> {
     await tx
       .update(verificationTokens)
