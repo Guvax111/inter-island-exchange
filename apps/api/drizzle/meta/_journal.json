@@ -15,6 +15,20 @@
       "when": 1790380930008,
       "tag": "0001_append_only_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790384737650,
+      "tag": "0002_marketplace",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790384738355,
+      "tag": "0003_marketplace_search_and_ledger",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,28 @@ export const EVENTS = {
   passwordResetRequested: 'auth.password_reset_requested',
   passwordChanged: 'auth.password_changed',
   accountSuspended: 'user.suspended',
+  sellerApproved: 'seller.approved',
+  sellerActivated: 'seller.activated',
+  sellerRejected: 'seller.rejected',
+  sellerChangesRequested: 'seller.changes_requested',
+  sellerSuspended: 'seller.suspended',
+  productApproved: 'product.approved',
+  productRejected: 'product.rejected',
+  productChangesRequested: 'product.changes_requested',
 } as const;
+
+const SELLER_EVENTS: Record<string, 'approved' | 'rejected' | 'changes_requested' | 'activated' | 'suspended'> = {
+  [EVENTS.sellerApproved]: 'approved',
+  [EVENTS.sellerActivated]: 'activated',
+  [EVENTS.sellerRejected]: 'rejected',
+  [EVENTS.sellerChangesRequested]: 'changes_requested',
+  [EVENTS.sellerSuspended]: 'suspended',
+};
+const PRODUCT_EVENTS: Record<string, 'approved' | 'rejected' | 'changes_requested'> = {
+  [EVENTS.productApproved]: 'approved',
+  [EVENTS.productRejected]: 'rejected',
+  [EVENTS.productChangesRequested]: 'changes_requested',
+};
 
 interface Recipient {
   email: string;
@@ -26,7 +47,7 @@ export class NotificationDispatcher {
   ) {}
 
   async dispatch(type: string, payload: Record<string, unknown>): Promise<void> {
-    const to = payload as unknown as Recipient & { token?: string };
+    const to = payload as unknown as Recipient & { token?: string; notes?: string; productId?: string; productTitle?: string };
     const web = this.config.WEB_BASE_URL.replace(/\/$/, '');
     switch (type) {
       case EVENTS.emailVerificationRequested:
@@ -40,6 +61,14 @@ export class NotificationDispatcher {
       case EVENTS.accountSuspended:
         return this.email.send(templates.accountSuspended(to.email, to.firstName));
       default:
+        if (SELLER_EVENTS[type]) {
+          return this.email.send(templates.sellerDecision(to.email, to.firstName, SELLER_EVENTS[type], to.notes, `${web}/dashboard/seller`));
+        }
+        if (PRODUCT_EVENTS[type]) {
+          return this.email.send(
+            templates.productDecision(to.email, to.firstName, to.productTitle ?? 'Your product', PRODUCT_EVENTS[type], to.notes, `${web}/dashboard/seller/products/${to.productId}`),
+          );
+        }
         // Events without a notification are acknowledged so they do not block the queue.
         return;
     }

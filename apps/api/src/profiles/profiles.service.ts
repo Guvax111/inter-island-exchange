@@ -11,6 +11,7 @@ import {
   currencies,
   mfaFactors,
   sellerProfiles,
+  sellerStorefronts,
   users,
 } from '../db/schema';
 import { AuditService } from '../audit/audit.service';
@@ -40,6 +41,9 @@ export class ProfilesService {
     if (!row) throw Errors.notFound('User');
     const [buyer] = await this.db.select().from(buyerProfiles).where(eq(buyerProfiles.userId, principal.userId));
     const [seller] = await this.db.select().from(sellerProfiles).where(eq(sellerProfiles.userId, principal.userId));
+    const [storefront] = seller
+      ? await this.db.select({ slug: sellerStorefronts.slug }).from(sellerStorefronts).where(eq(sellerStorefronts.sellerProfileId, seller.id))
+      : [];
     const [mfa] = await this.db.select({ confirmedAt: mfaFactors.confirmedAt }).from(mfaFactors).where(eq(mfaFactors.userId, principal.userId));
     const userAddresses = await this.db.select().from(addresses).where(eq(addresses.userId, principal.userId));
     const { user, country, currency } = row;
@@ -68,7 +72,14 @@ export class ProfilesService {
       mfaEnabled: !!mfa?.confirmedAt,
       buyerProfile: buyer ? { partyType: buyer.partyType, verificationLevel: buyer.verificationLevel } : null,
       sellerProfile: seller
-        ? { id: seller.id, partyType: seller.partyType, legalName: seller.legalName, category: seller.category, status: seller.status }
+        ? {
+            id: seller.id,
+            partyType: seller.partyType,
+            legalName: seller.legalName,
+            category: seller.category,
+            status: seller.status,
+            storefrontSlug: storefront?.slug ?? null,
+          }
         : null,
       addresses: userAddresses.map(({ userId: _u, ...a }) => a),
       nextAction,

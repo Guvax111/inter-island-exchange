@@ -30,3 +30,29 @@ export const SEED_COUNTRIES = [
 
 /** Pilot lane: St. Lucia -> St. Vincent and the Grenadines. */
 export const SEED_LANES = [{ origin: 'LC', destination: 'VC', enabled: true }];
+
+/** Starter category tree. Administrators manage categories afterwards; the seed never renames or removes them. */
+export const SEED_CATEGORIES: { slug: string; name: string; parent?: string; sortOrder: number }[] = [
+  { slug: 'baby-and-child', name: 'Baby & Child', sortOrder: 10 },
+  { slug: 'diapers-and-wipes', name: 'Diapers & Wipes', parent: 'baby-and-child', sortOrder: 10 },
+  { slug: 'baby-food', name: 'Baby Food', parent: 'baby-and-child', sortOrder: 20 },
+  { slug: 'baby-care', name: 'Baby Care', parent: 'baby-and-child', sortOrder: 30 },
+  { slug: 'food-and-beverage', name: 'Food & Beverage', sortOrder: 20 },
+  { slug: 'health-and-beauty', name: 'Health & Beauty', sortOrder: 30 },
+  { slug: 'household', name: 'Household', sortOrder: 40 },
+  { slug: 'clothing-and-accessories', name: 'Clothing & Accessories', sortOrder: 50 },
+  { slug: 'arts-and-crafts', name: 'Arts & Crafts', sortOrder: 60 },
+  { slug: 'electronics', name: 'Electronics', sortOrder: 70 },
+  { slug: 'agriculture', name: 'Agriculture', sortOrder: 80 },
+  { slug: 'other', name: 'Other', sortOrder: 1000 },
+];
+
+/**
+ * A few HS reference entries (6-digit headings) relevant to the pilot. Informational only: products store
+ * their own code, and the compliance engine (Phase 6) will use a complete, authoritative tariff dataset.
+ */
+export const SEED_HS_CODES = [
+  { code: '961900', description: 'Sanitary towels and tampons, napkins (diapers) and napkin liners for babies, and similar articles, of any material' },
+  { code: '190110', description: 'Food preparations for infant use, put up for retail sale' },
+  { code: '340111', description: 'Soap and organic surface-active products in bars or cakes, for toilet use' },
+];

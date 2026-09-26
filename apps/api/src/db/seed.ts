@@ -1,8 +1,8 @@
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { PERMISSIONS, ROLE_DEFINITIONS, ROLES } from '@iie/shared';
 import { createDatabase, Database } from './db';
-import { countries, currencies, lanes, permissions, rolePermissions, roles } from './schema';
-import { SEED_COUNTRIES, SEED_CURRENCIES, SEED_LANES } from './seed-data';
+import { categories, countries, currencies, hsCodes, lanes, permissions, rolePermissions, roles } from './schema';
+import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_HS_CODES, SEED_LANES } from './seed-data';
 
 /** Makes the roles/permissions tables match the catalogue in @iie/shared. */
 export async function syncRbac(db: Database): Promise<void> {
@@ -48,6 +48,15 @@ export async function seedReferenceData(db: Database): Promise<void> {
     await db
       .insert(lanes)
       .values({ originCountryId: byIso.get(lane.origin)!, destinationCountryId: byIso.get(lane.destination)!, enabled: lane.enabled })
+      .onConflictDoNothing();
+  }
+  await db.insert(hsCodes).values(SEED_HS_CODES).onConflictDoNothing();
+  // Parents first, so children can reference them.
+  for (const c of [...SEED_CATEGORIES].sort((a, b) => Number(!!a.parent) - Number(!!b.parent))) {
+    const [parent] = c.parent ? await db.select({ id: categories.id }).from(categories).where(eq(categories.slug, c.parent)) : [];
+    await db
+      .insert(categories)
+      .values({ slug: c.slug, name: c.name, sortOrder: c.sortOrder, parentId: parent?.id ?? null })
       .onConflictDoNothing();
   }
   await syncRbac(db);

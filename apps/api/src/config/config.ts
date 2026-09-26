@@ -32,6 +32,10 @@ const envSchema = z
     RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(300),
     /** Per-IP limit for sign-in, sign-up and password endpoints. */
     AUTH_RATE_LIMIT_PER_MIN: z.coerce.number().int().min(1).default(10),
+    /** File storage for images. `local` writes to MEDIA_LOCAL_DIR (local/test/single-instance staging only). */
+    STORAGE_PROVIDER: z.enum(['local']).default('local'),
+    MEDIA_LOCAL_DIR: z.string().default('.media'),
+    MAX_UPLOAD_MB: z.coerce.number().min(1).max(20).default(8),
   })
   .superRefine((env, ctx) => {
     if (env.EMAIL_PROVIDER === 'smtp') {
@@ -42,6 +46,9 @@ const envSchema = z
     if (env.APP_ENV === 'production') {
       if (env.EMAIL_PROVIDER === 'sandbox') {
         ctx.addIssue({ code: 'custom', path: ['EMAIL_PROVIDER'], message: 'Sandbox providers are not allowed in production' });
+      }
+      if (env.STORAGE_PROVIDER === 'local') {
+        ctx.addIssue({ code: 'custom', path: ['STORAGE_PROVIDER'], message: 'Local disk storage is not allowed in production; configure object storage' });
       }
       if (!env.COOKIE_SECURE) ctx.addIssue({ code: 'custom', path: ['COOKIE_SECURE'], message: 'Must be true in production' });
       if (!env.WEB_BASE_URL.startsWith('https://')) {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, PARTY_TYPES } from './statuses';
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, MAX_CART_QUANTITY, PARTY_TYPES, PRODUCT_STATUSES } from './statuses';
 import { ROLES } from './rbac';
 
 export const PASSWORD_MIN_LENGTH = 12;
@@ -121,3 +121,135 @@ export const auditQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
+
+// ------------------------------------------------------------------ Phase 2: marketplace
+
+export const slugSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Use lowercase letters, numbers and single hyphens').min(3).max(60);
+/** Decimal price as typed by a seller, e.g. "12.50". Converted to minor units on the server. */
+export const priceInputSchema = z.string().trim().regex(/^\d{1,9}(\.\d{1,2})?$/, 'Enter a price like 12.50');
+/** Harmonized System code: 6 to 10 digits, dots optional (e.g. 9619.00 or 961900). */
+export const hsCodeSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[.\s]/g, ''))
+  .pipe(z.string().regex(/^\d{6,10}$/, 'Enter a 6 to 10 digit HS code, e.g. 9619.00'));
+
+export const sellerProfileUpdateSchema = z
+  .object({
+    legalName: z.string().trim().min(1).max(200),
+    businessName: optionalText(200),
+    registrationNumber: optionalText(100),
+    taxId: optionalText(100),
+    phone: phoneSchema,
+    website: z.union([z.url().max(300), z.literal('')]).optional().transform((v) => (v ? v : undefined)),
+    category: z.string().trim().min(1).max(100),
+  })
+  .partial();
+
+export const storefrontUpdateSchema = z
+  .object({
+    slug: slugSchema,
+    displayName: z.string().trim().min(2).max(100),
+    description: z.string().trim().max(2000),
+    shippingOrigin: z.string().trim().max(100),
+    returnPolicy: z.string().trim().max(4000),
+    storePolicies: z.string().trim().max(4000),
+  })
+  .partial();
+export type StorefrontUpdateInput = z.infer<typeof storefrontUpdateSchema>;
+
+export const categoryCreateSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  slug: slugSchema,
+  parentSlug: slugSchema.optional(),
+  sortOrder: z.number().int().min(0).max(10000).default(0),
+});
+export const categoryUpdateSchema = z
+  .object({ name: z.string().trim().min(2).max(80), sortOrder: z.number().int().min(0).max(10000), active: z.boolean() })
+  .partial();
+
+const dimension = z.number().int().min(1).max(10_000_000);
+export const variantInputSchema = z.object({
+  sku: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/, 'Letters, numbers, dots, dashes and underscores only'),
+  name: z.string().trim().min(1).max(100),
+  price: priceInputSchema,
+  quantity: z.number().int().min(0).max(1_000_000).default(0),
+});
+export type VariantInput = z.infer<typeof variantInputSchema>;
+
+/** Product fields without defaults, so partial updates never fill in values the caller did not send. */
+const productFieldsSchema = z.object({
+  title: z.string().trim().min(3).max(150),
+  shortDescription: z.string().trim().min(1).max(300),
+  description: z.string().trim().max(10_000),
+  categorySlug: slugSchema,
+  brand: optionalText(100),
+  hsCode: hsCodeSchema.optional(),
+  countryOfOrigin: countryCodeSchema,
+  weightGrams: dimension.optional(),
+  lengthMm: dimension.optional(),
+  widthMm: dimension.optional(),
+  heightMm: dimension.optional(),
+  attributes: z.record(z.string().max(50), z.string().max(200)),
+});
+
+export const productCreateSchema = productFieldsSchema.extend({
+  description: productFieldsSchema.shape.description.default(''),
+  attributes: productFieldsSchema.shape.attributes.default({}),
+  variants: z.array(variantInputSchema).min(1).max(50),
+});
+export type ProductCreateInput = z.infer<typeof productCreateSchema>;
+
+/** Content fields: changing any of these on a live product sends it back to review. */
+export const PRODUCT_CONTENT_FIELDS = ['title', 'shortDescription', 'description', 'categorySlug', 'brand', 'hsCode', 'countryOfOrigin', 'attributes'] as const;
+
+export const productUpdateSchema = productFieldsSchema.partial();
+export type ProductUpdateInput = z.infer<typeof productUpdateSchema>;
+
+export const variantUpdateSchema = z.object({ name: z.string().trim().min(1).max(100), price: priceInputSchema }).partial();
+export const inventoryAdjustSchema = z.object({
+  /** Set the on-hand quantity to this value (a stock count). */
+  quantity: z.number().int().min(0).max(1_000_000),
+  note: optionalText(200),
+});
+
+export const reviewDecisionSchema = z
+  .object({ decision: z.enum(['APPROVE', 'REJECT', 'REQUEST_CHANGES']), notes: optionalText(2000) })
+  .refine((v) => v.decision === 'APPROVE' || (v.notes?.length ?? 0) >= 3, {
+    message: 'Explain what needs to change (at least 3 characters)',
+    path: ['notes'],
+  });
+export type ReviewDecision = z.infer<typeof reviewDecisionSchema>;
+
+export const payoutSetupSchema = z.object({
+  /** Pilot: how payouts were arranged (no bank details here; those live with the payment partner from Phase 4). */
+  note: z.string().trim().min(3).max(500),
+});
+
+export const productSearchSchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  category: slugSchema.optional(),
+  seller: slugSchema.optional(),
+  sellerCountry: countryCodeSchema.optional(),
+  destination: countryCodeSchema.optional(),
+  countryOfOrigin: countryCodeSchema.optional(),
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
+  minPrice: priceInputSchema.optional(),
+  maxPrice: priceInputSchema.optional(),
+  inStock: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+  sort: z.enum(['relevance', 'newest', 'price_asc', 'price_desc']).default('relevance'),
+  page: z.coerce.number().int().min(1).max(500).default(1),
+  pageSize: z.coerce.number().int().min(1).max(48).default(24),
+});
+export type ProductSearchInput = z.infer<typeof productSearchSchema>;
+
+export const adminProductQuerySchema = z.object({
+  status: z.enum(PRODUCT_STATUSES).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+export const cartAddSchema = z.object({ variantId: z.uuid(), quantity: z.number().int().min(1).max(MAX_CART_QUANTITY) });
+export const cartUpdateSchema = z.object({ quantity: z.number().int().min(1).max(MAX_CART_QUANTITY) });
+
+export const addressCreateSchema = addressSchema.extend({ label: optionalText(50), makeDefault: z.boolean().default(false) });

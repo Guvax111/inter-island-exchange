@@ -256,6 +256,10 @@ export const sellerProfiles = pgTable(
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
     reviewedBy: uuid('reviewed_by').references(() => users.id),
     reviewNotes: text('review_notes'),
+    /** Pilot: payouts are arranged manually until the payment partner integration (Phase 4). */
+    payoutSetupConfirmedAt: timestamp('payout_setup_confirmed_at', { withTimezone: true }),
+    payoutSetupConfirmedBy: uuid('payout_setup_confirmed_by').references(() => users.id),
+    payoutSetupNote: text('payout_setup_note'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -340,4 +344,204 @@ export const outboxEvents = pgTable(
     lastError: text('last_error'),
   },
   (t) => [index('outbox_pending_idx').on(t.availableAt).where(sql`processed_at is null`)],
+);
+
+// ---------------------------------------------------------------- Phase 2: marketplace
+
+/** Uploaded files. Stored through the StorageProvider; served by the API with visibility checks. */
+export const mediaAssets = pgTable(
+  'media_assets',
+  {
+    id: id(),
+    ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
+    kind: varchar('kind', { length: 30 }).notNull(),
+    storageKey: varchar('storage_key', { length: 200 }).notNull().unique(),
+    contentType: varchar('content_type', { length: 50 }).notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    bytes: integer('bytes').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [check('media_assets_kind_chk', inList('kind', ['PRODUCT_IMAGE', 'STORE_LOGO'])), index('media_assets_owner_idx').on(t.ownerUserId)],
+);
+
+export const sellerStorefronts = pgTable('seller_storefronts', {
+  id: id(),
+  sellerProfileId: uuid('seller_profile_id').notNull().unique().references(() => sellerProfiles.id),
+  /** Public URL: /seller/{slug} */
+  slug: varchar('slug', { length: 60 }).notNull().unique(),
+  displayName: varchar('display_name', { length: 100 }).notNull(),
+  description: text('description').notNull().default(''),
+  logoMediaId: uuid('logo_media_id').references(() => mediaAssets.id),
+  shippingOrigin: varchar('shipping_origin', { length: 100 }).notNull().default(''),
+  returnPolicy: text('return_policy').notNull().default(''),
+  storePolicies: text('store_policies').notNull().default(''),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const categories = pgTable(
+  'categories',
+  {
+    id: id(),
+    parentId: uuid('parent_id'),
+    name: varchar('name', { length: 80 }).notNull(),
+    slug: varchar('slug', { length: 60 }).notNull().unique(),
+    active: boolean('active').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('categories_parent_idx').on(t.parentId)],
+);
+
+/** Reference descriptions for Harmonized System codes. Products store the code itself; this table is informational. */
+export const hsCodes = pgTable('hs_codes', {
+  code: varchar('code', { length: 10 }).primaryKey(),
+  description: text('description').notNull(),
+});
+
+export const products = pgTable(
+  'products',
+  {
+    id: id(),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    title: varchar('title', { length: 150 }).notNull(),
+    shortDescription: varchar('short_description', { length: 300 }).notNull(),
+    description: text('description').notNull().default(''),
+    categoryId: uuid('category_id').notNull().references(() => categories.id),
+    brand: varchar('brand', { length: 100 }),
+    hsCode: varchar('hs_code', { length: 10 }),
+    countryOfOriginId: uuid('country_of_origin_id').notNull().references(() => countries.id),
+    weightGrams: integer('weight_grams'),
+    lengthMm: integer('length_mm'),
+    widthMm: integer('width_mm'),
+    heightMm: integer('height_mm'),
+    attributes: jsonb('attributes').$type<Record<string, string>>().notNull().default({}),
+    status: varchar('status', { length: 20 }).notNull().default('DRAFT'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: uuid('reviewed_by').references(() => users.id),
+    reviewNotes: text('review_notes'),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('products_status_chk', inList('status', ['DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'OUT_OF_STOCK', 'ARCHIVED'])),
+    index('products_seller_status_idx').on(t.sellerProfileId, t.status),
+    index('products_category_idx').on(t.categoryId),
+    index('products_status_published_idx').on(t.status, t.publishedAt),
+  ],
+);
+
+export const productVariants = pgTable(
+  'product_variants',
+  {
+    id: id(),
+    productId: uuid('product_id').notNull().references(() => products.id),
+    /** Unique per seller (enforced in the service, and by sellerProfileId + sku). */
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    sku: varchar('sku', { length: 64 }).notNull(),
+    name: varchar('name', { length: 100 }).notNull(),
+    priceMinor: bigint('price_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    archived: boolean('archived').notNull().default(false),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('product_variants_seller_sku_uq').on(t.sellerProfileId, t.sku),
+    check('product_variants_price_chk', sql`${t.priceMinor} > 0`),
+    index('product_variants_product_idx').on(t.productId),
+  ],
+);
+
+export const inventory = pgTable(
+  'inventory',
+  {
+    variantId: uuid('variant_id').primaryKey().references(() => productVariants.id),
+    quantityOnHand: integer('quantity_on_hand').notNull().default(0),
+    /** Held for unpaid checkouts (Phase 3). */
+    quantityReserved: integer('quantity_reserved').notNull().default(0),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('inventory_on_hand_chk', sql`${t.quantityOnHand} >= 0`),
+    check('inventory_reserved_chk', sql`${t.quantityReserved} >= 0 and ${t.quantityReserved} <= ${t.quantityOnHand}`),
+  ],
+);
+
+/** Append-only stock ledger: every change to on-hand quantity, with who and why. */
+export const inventoryMovements = pgTable(
+  'inventory_movements',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    variantId: uuid('variant_id').notNull().references(() => productVariants.id),
+    delta: integer('delta').notNull(),
+    quantityAfter: integer('quantity_after').notNull(),
+    reason: varchar('reason', { length: 30 }).notNull(),
+    note: varchar('note', { length: 200 }),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('inventory_movements_reason_chk', inList('reason', ['INITIAL', 'STOCK_COUNT', 'SALE', 'RETURN', 'CORRECTION'])),
+    index('inventory_movements_variant_idx').on(t.variantId, t.createdAt),
+  ],
+);
+
+export const productImages = pgTable(
+  'product_images',
+  {
+    id: id(),
+    productId: uuid('product_id').notNull().references(() => products.id),
+    mediaId: uuid('media_id').notNull().unique().references(() => mediaAssets.id),
+    altText: varchar('alt_text', { length: 200 }).notNull().default(''),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index('product_images_product_idx').on(t.productId, t.sortOrder)],
+);
+
+export const carts = pgTable('carts', {
+  id: id(),
+  userId: uuid('user_id').notNull().unique().references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Cart lines hold quantities only. Prices are always read live; they are frozen at checkout (Phase 3). */
+export const cartItems = pgTable(
+  'cart_items',
+  {
+    id: id(),
+    cartId: uuid('cart_id').notNull().references(() => carts.id, { onDelete: 'cascade' }),
+    variantId: uuid('variant_id').notNull().references(() => productVariants.id),
+    quantity: integer('quantity').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique('cart_items_cart_variant_uq').on(t.cartId, t.variantId), check('cart_items_quantity_chk', sql`${t.quantity} between 1 and 99`)],
+);
+
+export const savedProducts = pgTable(
+  'saved_products',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id),
+    productId: uuid('product_id').notNull().references(() => products.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.productId] })],
+);
+
+export const savedSellers = pgTable(
+  'saved_sellers',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.sellerProfileId] })],
 );

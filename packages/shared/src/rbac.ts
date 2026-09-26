@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   'order.create',
   'order.read.own',
   'dispute.create.own',
+  'saved.manage.own',
   // Selling (Phase 2+)
   'product.manage.own',
   'order.fulfil.own',
@@ -36,6 +37,7 @@ export const PERMISSIONS = [
   'audit.read',
   'payout.approve',
   'config.manage',
+  'category.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -62,7 +64,7 @@ export const SELF_REGISTRABLE_ROLES = ['buyer', 'seller'] as const satisfies rea
 export const COUNTRY_SCOPED_ROLES = ['country_admin'] as const satisfies readonly Role[];
 
 const OWN_ACCOUNT: Permission[] = ['profile.read.own', 'profile.update.own', 'session.manage.own', 'account.delete.own'];
-const BUYING: Permission[] = ['cart.manage.own', 'order.create', 'order.read.own', 'dispute.create.own'];
+const BUYING: Permission[] = ['cart.manage.own', 'order.create', 'order.read.own', 'dispute.create.own', 'saved.manage.own'];
 const SELLING: Permission[] = ['product.manage.own', 'order.fulfil.own', 'order.read.own', 'payout.read.own'];
 const LOGISTICS: Permission[] = ['shipment.read.assigned', 'shipment.update.assigned', 'customs.document.manage'];
 

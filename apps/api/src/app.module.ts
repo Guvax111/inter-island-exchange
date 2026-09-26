@@ -24,6 +24,20 @@ import { AdminCountriesController, CountriesController } from './countries/count
 import { AdminUsersService } from './admin/admin-users.service';
 import { AdminController } from './admin/admin.controller';
 import { HealthController } from './health.controller';
+import { createStorageProvider, STORAGE_PROVIDER, type StorageProvider } from './media/storage.provider';
+import { MediaService } from './media/media.service';
+import { MediaController } from './media/media.controller';
+import { CategoriesService } from './catalog/categories.service';
+import { ProductsService } from './catalog/products.service';
+import { AdminCategoriesController, AdminProductsController, CategoriesController, SellerProductsController } from './catalog/catalog.controllers';
+import { SellersService } from './sellers/sellers.service';
+import { AdminSellersController, SellerSelfController } from './sellers/sellers.controllers';
+import { PostgresProductSearch, PRODUCT_SEARCH } from './marketplace/search.provider';
+import { MarketplaceService } from './marketplace/marketplace.service';
+import { MarketplaceController } from './marketplace/marketplace.controller';
+import { CartService } from './cart/cart.service';
+import { SavedService } from './cart/saved.service';
+import { CartController, SavedController } from './cart/cart.controllers';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 class PoolShutdown implements OnApplicationShutdown {
@@ -36,6 +50,7 @@ class PoolShutdown implements OnApplicationShutdown {
 export interface AppModuleOptions {
   /** Tests inject a SandboxEmailProvider to read sent messages. */
   emailProvider?: EmailProvider;
+  storageProvider?: StorageProvider;
 }
 
 /**
@@ -61,12 +76,31 @@ export class AppModule {
           ],
         }),
       ],
-      controllers: [AuthController, ProfilesController, CountriesController, AdminCountriesController, AdminController, HealthController],
+      controllers: [
+        AuthController,
+        ProfilesController,
+        CountriesController,
+        AdminCountriesController,
+        AdminController,
+        HealthController,
+        MediaController,
+        CategoriesController,
+        AdminCategoriesController,
+        SellerProductsController,
+        AdminProductsController,
+        SellerSelfController,
+        AdminSellersController,
+        MarketplaceController,
+        CartController,
+        SavedController,
+      ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: DB, useValue: db },
         { provide: PG_POOL, useValue: pool },
         { provide: EMAIL_PROVIDER, useValue: options.emailProvider ?? createEmailProvider(config) },
+        { provide: STORAGE_PROVIDER, useValue: options.storageProvider ?? createStorageProvider(config) },
+        { provide: PRODUCT_SEARCH, useClass: PostgresProductSearch },
         { provide: APP_GUARD, useClass: ThrottlerGuard },
         { provide: APP_GUARD, useClass: AuthGuard },
         { provide: APP_PIPE, useClass: ZodValidationPipe },
@@ -83,6 +117,13 @@ export class AppModule {
         ProfilesService,
         CountriesService,
         AdminUsersService,
+        MediaService,
+        CategoriesService,
+        ProductsService,
+        SellersService,
+        MarketplaceService,
+        CartService,
+        SavedService,
       ],
     };
   }

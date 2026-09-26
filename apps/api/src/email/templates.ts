@@ -41,6 +41,24 @@ export const templates = {
       'Your Inter-Island Exchange password was just changed and your other sessions were signed out.',
       'If you did not do this, reset your password immediately and contact support.',
     ]),
+  sellerDecision: (to: string, firstName: string, decision: 'approved' | 'rejected' | 'changes_requested' | 'activated' | 'suspended', notes: string | undefined, url: string) => {
+    const copy = {
+      approved: ['Your seller application is approved', 'Good news: IIE has approved your seller application. Our team will contact you to set up how you receive payouts. You can start preparing your storefront and products now; they go live once payouts are set up.'],
+      activated: ['Your store is live', 'Payout setup is complete and your seller account is active. Approved products now appear on the marketplace.'],
+      rejected: ['Update on your seller application', 'We are unable to approve your seller application at this time.'],
+      changes_requested: ['Your seller application needs changes', 'Please update your seller details and submit them again.'],
+      suspended: ['Your seller account has been suspended', 'Your products are hidden from the marketplace while your seller account is suspended. Contact support if you believe this is a mistake.'],
+    }[decision];
+    return render(to, copy[0]!, [`Hi ${firstName},`, copy[1]!, ...(notes ? [`Note from the IIE team: ${notes}`] : [])], { label: 'Open seller dashboard', url });
+  },
+  productDecision: (to: string, firstName: string, title: string, decision: 'approved' | 'rejected' | 'changes_requested', notes: string | undefined, url: string) => {
+    const copy = {
+      approved: [`"${title}" is approved`, 'Your product passed review and is now on the marketplace (while your store is active and the item is in stock).'],
+      rejected: [`"${title}" was not approved`, 'This product cannot be listed on IIE.'],
+      changes_requested: [`"${title}" needs changes`, 'Please update the product and submit it for review again.'],
+    }[decision];
+    return render(to, copy[0]!, [`Hi ${firstName},`, copy[1]!, ...(notes ? [`Note from the IIE team: ${notes}`] : [])], { label: 'Open product', url });
+  },
   accountSuspended: (to: string, firstName: string) =>
     render(to, 'Your account has been suspended', [
       `Hi ${firstName},`,

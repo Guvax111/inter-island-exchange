@@ -26,3 +26,17 @@ export type PartyType = (typeof PARTY_TYPES)[number];
 
 /** Account statuses that may sign in. */
 export const SIGN_IN_ALLOWED_STATUSES: readonly AccountStatus[] = ['DRAFT', 'PENDING_VERIFICATION', 'UNDER_REVIEW', 'ACTIVE'];
+
+/**
+ * Product lifecycle:
+ *   DRAFT -> PENDING_REVIEW -> ACTIVE (admin approval) | REJECTED
+ *   ACTIVE <-> OUT_OF_STOCK (automatic, from inventory)
+ *   SUSPENDED (admin), ARCHIVED (seller)
+ */
+export const PRODUCT_STATUSES = ['DRAFT', 'PENDING_REVIEW', 'ACTIVE', 'REJECTED', 'SUSPENDED', 'OUT_OF_STOCK', 'ARCHIVED'] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+
+/** Product statuses that can appear on the public marketplace (subject to the seller being active). */
+export const PUBLIC_PRODUCT_STATUSES: readonly ProductStatus[] = ['ACTIVE', 'OUT_OF_STOCK'];
+
+export const MAX_CART_QUANTITY = 99;
