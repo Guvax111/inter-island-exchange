@@ -12,6 +12,7 @@ import type { RequestMeta } from '../common/request';
 import { slugify } from '../common/slug';
 import type { Principal } from '../rbac/principal';
 import { MediaService } from '../media/media.service';
+import { SellerDocumentsService } from './seller-documents.service';
 
 type SellerRow = typeof sellerProfiles.$inferSelect;
 const EDITABLE_STOREFRONT_STATUSES = ['APPROVED', 'ACTIVE'];
@@ -30,6 +31,7 @@ export class SellersService {
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
     private readonly media: MediaService,
+    private readonly documents: SellerDocumentsService,
   ) {}
 
   // ------------------------------------------------------------------ seller self-service
@@ -183,13 +185,17 @@ export class SellersService {
       .where(eq(users.id, seller.userId));
     const [business] = seller.businessId ? await this.db.select().from(businesses).where(eq(businesses.id, seller.businessId)) : [];
     const [storefront] = await this.db.select().from(sellerStorefronts).where(eq(sellerStorefronts.sellerProfileId, seller.id));
-    return { seller, user, business: business ?? null, storefront: storefront ? this.storefrontDto(storefront) : null };
+    const documents = (await this.documents.forSeller(seller.id)).map((d) => this.documents.view(d));
+    return { seller, user, business: business ?? null, storefront: storefront ? this.storefrontDto(storefront) : null, documents };
   }
 
   async review(principal: Principal, sellerId: string, decision: ReviewDecision, meta: RequestMeta) {
     const seller = await this.loadInScope(principal, sellerId);
     if (seller.userId === principal.userId) throw Errors.forbidden('You cannot review your own seller application');
     if (seller.status !== 'UNDER_REVIEW') throw Errors.conflict('NOT_UNDER_REVIEW', 'This application is not waiting for review');
+    if (decision.decision === 'APPROVE' && !(await this.documents.hasAccepted(seller.id))) {
+      throw Errors.conflict('DOCUMENT_REQUIRED', 'Accept the seller’s proof of business registration or national ID before approving');
+    }
     const next = { APPROVE: 'APPROVED', REJECT: 'REJECTED', REQUEST_CHANGES: 'DRAFT' }[decision.decision];
     const event = { APPROVE: EVENTS.sellerApproved, REJECT: EVENTS.sellerRejected, REQUEST_CHANGES: EVENTS.sellerChangesRequested }[decision.decision];
 

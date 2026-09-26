@@ -78,6 +78,20 @@
       "when": 1790438468013,
       "tag": "0010_logistics_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790459278716,
+      "tag": "0011_disputes_payouts_verification_tariffs",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790459279926,
+      "tag": "0012_phase6_rules",
+      "breakpoints": true
     }
   ]
 }

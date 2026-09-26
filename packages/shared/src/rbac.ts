@@ -39,6 +39,7 @@ export const PERMISSIONS = [
   'config.manage',
   'category.manage',
   'partner.manage',
+  'dispute.resolve',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -82,7 +83,7 @@ export const ROLE_DEFINITIONS: Record<Role, { name: string; description: string;
   compliance_officer: {
     name: 'Compliance Officer',
     description: 'Reviews KYC, sellers and suspicious activity',
-    permissions: [...OWN_ACCOUNT, 'user.read.any', 'transaction.read.any', 'compliance.review', 'seller.review', 'user.suspend', 'audit.read'],
+    permissions: [...OWN_ACCOUNT, 'user.read.any', 'transaction.read.any', 'compliance.review', 'seller.review', 'user.suspend', 'audit.read', 'dispute.resolve'],
   },
   country_admin: {
     name: 'Country Administrator',

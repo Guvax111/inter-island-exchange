@@ -13,9 +13,10 @@ export interface CreateIntentInput {
 
 export interface ProviderEvent {
   eventId: string;
-  type: 'payment.processing' | 'payment.succeeded' | 'payment.failed' | 'refund.succeeded' | 'refund.failed';
+  type: 'payment.processing' | 'payment.succeeded' | 'payment.failed' | 'refund.succeeded' | 'refund.failed' | 'payout.succeeded' | 'payout.failed';
   providerIntentId?: string;
   providerRefundId?: string;
+  providerPayoutId?: string;
   amountMinor?: bigint;
   currency?: string;
   failureReason?: string;
@@ -31,6 +32,14 @@ export interface PaymentProvider {
   createIntent(input: CreateIntentInput): Promise<{ providerIntentId: string; redirectUrl: string }>;
   refund(input: { providerIntentId: string; amountMinor: bigint; currency: string; reason: string; idempotencyKey: string }): Promise<{
     providerRefundId: string;
+    status: 'SUCCEEDED' | 'PENDING';
+  }>;
+  /**
+   * Pays a seller out of the funds the provider holds for a transaction. `SUCCEEDED` when settled at once;
+   * `PENDING` when the provider confirms later with a payout.succeeded / payout.failed webhook.
+   */
+  payout(input: { reference: string; amountMinor: bigint; currency: string; sellerReference: string; idempotencyKey: string }): Promise<{
+    providerPayoutId: string;
     status: 'SUCCEEDED' | 'PENDING';
   }>;
   /** Verifies the signature and parses the event. Throws on anything invalid. */
@@ -64,6 +73,10 @@ export class SandboxPaymentProvider implements PaymentProvider {
     return { providerRefundId: `sbx_re_${randomBytes(12).toString('hex')}`, status: 'SUCCEEDED' as const };
   }
 
+  async payout() {
+    return { providerPayoutId: `sbx_po_${randomBytes(12).toString('hex')}`, status: 'SUCCEEDED' as const };
+  }
+
   /** Link token for the hosted page, so only the buyer who was redirected can complete the payment. */
   pageToken(providerIntentId: string): string {
     return createHmac('sha256', this.secret).update(`page:${providerIntentId}`).digest('base64url');
@@ -92,7 +105,7 @@ export class SandboxPaymentProvider implements PaymentProvider {
       throw invalid();
     }
     const type = raw.type as ProviderEvent['type'];
-    if (!['payment.processing', 'payment.succeeded', 'payment.failed', 'refund.succeeded', 'refund.failed'].includes(type) || typeof raw.id !== 'string') {
+    if (!['payment.processing', 'payment.succeeded', 'payment.failed', 'refund.succeeded', 'refund.failed', 'payout.succeeded', 'payout.failed'].includes(type) || typeof raw.id !== 'string') {
       throw invalid();
     }
     return {
@@ -100,6 +113,7 @@ export class SandboxPaymentProvider implements PaymentProvider {
       type,
       providerIntentId: raw.payment_intent as string | undefined,
       providerRefundId: raw.refund as string | undefined,
+      providerPayoutId: raw.payout as string | undefined,
       amountMinor: raw.amount_minor !== undefined ? BigInt(String(raw.amount_minor)) : undefined,
       currency: raw.currency as string | undefined,
       failureReason: raw.failure_reason as string | undefined,

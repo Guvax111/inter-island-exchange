@@ -37,11 +37,13 @@ export class CountriesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list() {
+  /** CARICOM countries; with `includeOrigins`, also the countries recorded only as a product's origin. */
+  async list(includeOrigins = false) {
     const rows = await this.db
       .select({ country: countries, currency: currencies })
       .from(countries)
       .innerJoin(currencies, eq(currencies.code, countries.currencyCode))
+      .where(includeOrigins ? undefined : eq(countries.regionalBloc, 'CARICOM'))
       .orderBy(asc(countries.name));
     return rows.map((r) => toPublic(r.country, r.currency));
   }

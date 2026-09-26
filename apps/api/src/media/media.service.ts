@@ -4,7 +4,7 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import sharp, { type OutputInfo } from 'sharp';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { Database, DB, Tx } from '../db/db';
-import { countries, deliveryProofs, mediaAssets, partnerMembers, productImages, products, sellerProfiles, sellerStorefronts, shipments, transactions, users } from '../db/schema';
+import { countries, deliveryProofs, disputeMessages, disputes, mediaAssets, partnerMembers, productImages, products, sellerProfiles, sellerStorefronts, shipments, transactions, users } from '../db/schema';
 import { AppError, Errors } from '../common/errors';
 import { isPublicStatus, PUBLIC_PRODUCT_JOINS } from '../catalog/visibility';
 import type { Principal } from '../rbac/principal';
@@ -14,13 +14,14 @@ const ACCEPTED_FORMATS = new Set(['jpeg', 'png', 'webp']);
 const MAX_EDGE = 1600;
 const MAX_INPUT_PIXELS = 40_000_000;
 
-export type MediaKind = 'PRODUCT_IMAGE' | 'STORE_LOGO' | 'DELIVERY_PHOTO' | 'DELIVERY_SIGNATURE';
+export type MediaKind = 'PRODUCT_IMAGE' | 'STORE_LOGO' | 'DELIVERY_PHOTO' | 'DELIVERY_SIGNATURE' | 'DISPUTE_EVIDENCE';
 
 const KIND_STORAGE: Record<MediaKind, { prefix: string; maxEdge: number }> = {
   PRODUCT_IMAGE: { prefix: 'products', maxEdge: MAX_EDGE },
   STORE_LOGO: { prefix: 'logos', maxEdge: 512 },
   DELIVERY_PHOTO: { prefix: 'deliveries', maxEdge: MAX_EDGE },
   DELIVERY_SIGNATURE: { prefix: 'signatures', maxEdge: 800 },
+  DISPUTE_EVIDENCE: { prefix: 'disputes', maxEdge: MAX_EDGE },
 };
 
 @Injectable()
@@ -94,6 +95,8 @@ export class MediaService {
     let allowed = principal?.userId === asset.ownerUserId;
     if (asset.kind === 'DELIVERY_PHOTO' || asset.kind === 'DELIVERY_SIGNATURE') {
       allowed ||= !!principal && (await this.canSeeDeliveryProof(mediaId, principal));
+    } else if (asset.kind === 'DISPUTE_EVIDENCE') {
+      allowed ||= !!principal && (await this.canSeeDisputeEvidence(mediaId, principal));
     } else {
       const context = asset.kind === 'PRODUCT_IMAGE' ? await this.productContext(mediaId) : await this.logoContext(mediaId);
       isPublic = context?.isPublic ?? false;
@@ -124,6 +127,24 @@ export class MediaService {
       .from(partnerMembers)
       .where(and(eq(partnerMembers.userId, principal.userId), inArray(partnerMembers.partnerId, partnerIds)));
     return !!member;
+  }
+
+  /** Dispute evidence: the buyer, the seller and IIE staff for either country. */
+  private async canSeeDisputeEvidence(mediaId: string, principal: Principal): Promise<boolean> {
+    const [row] = await this.db
+      .select({ buyer: transactions.buyerUserId, sellerUser: sellerProfiles.userId, origin: transactions.originCountryId, destination: transactions.destinationCountryId })
+      .from(disputeMessages)
+      .innerJoin(disputes, eq(disputes.id, disputeMessages.disputeId))
+      .innerJoin(transactions, eq(transactions.id, disputes.transactionId))
+      .innerJoin(sellerProfiles, eq(sellerProfiles.id, transactions.sellerProfileId))
+      .where(eq(disputeMessages.mediaId, mediaId));
+    if (!row) return false;
+    return (
+      row.buyer === principal.userId ||
+      row.sellerUser === principal.userId ||
+      principal.canInCountry('transaction.read.any', row.origin) ||
+      principal.canInCountry('transaction.read.any', row.destination)
+    );
   }
 
   private async productContext(mediaId: string) {

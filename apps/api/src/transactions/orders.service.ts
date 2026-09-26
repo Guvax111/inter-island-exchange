@@ -9,6 +9,7 @@ import {
   inventoryReservations,
   orderItems,
   orders,
+  payouts,
   sellerProfiles,
   sellerStorefronts,
   transactionEvents,
@@ -23,6 +24,7 @@ import type { Principal } from '../rbac/principal';
 import { STATUS_LABELS } from './state-machine';
 import { TransactionEngine } from './transaction-engine';
 import { ShipmentsService } from '../logistics/shipments.service';
+import { DisputesService } from '../disputes/disputes.service';
 
 type TransactionRow = typeof transactions.$inferSelect;
 type View = 'BUYER' | 'SELLER' | 'ADMIN';
@@ -36,6 +38,7 @@ export class OrdersService {
     private readonly engine: TransactionEngine,
     private readonly audit: AuditService,
     private readonly shipments: ShipmentsService,
+    private readonly disputes: DisputesService,
   ) {}
 
   // ------------------------------------------------------------------ reads
@@ -175,6 +178,11 @@ export class OrdersService {
     };
   }
 
+  private async payoutView(t: TransactionRow, currency: typeof currencies.$inferSelect) {
+    const [p] = await this.db.select().from(payouts).where(eq(payouts.transactionId, t.id));
+    return p ? { status: p.status, amount: toMoneyDto(p.amountMinor, currency), paidAt: p.releasedAt, providerReference: p.providerPayoutId } : null;
+  }
+
   private async detail(t: TransactionRow, view: View) {
     const [currency] = await this.db.select().from(currencies).where(eq(currencies.code, t.transactionCurrency));
     const [order] = await this.db.select().from(orders).where(eq(orders.id, t.orderId));
@@ -205,6 +213,10 @@ export class OrdersService {
       canMarkReady: view === 'SELLER' && t.status === 'SELLER_CONFIRMED',
       canConfirmDelivery: view === 'BUYER' && t.status === 'DELIVERED',
       deliveryConfirmDueAt: t.status === 'DELIVERED' ? t.deliveryConfirmDueAt : null,
+      canReportProblem: view === 'BUYER' && ['DELIVERED', 'DISPUTE_WINDOW'].includes(t.status),
+      reviewEndsAt: t.status === 'DISPUTE_WINDOW' ? t.reviewEndsAt : null,
+      dispute: await this.disputes.summaryFor(t),
+      ...(view !== 'BUYER' ? { payout: await this.payoutView(t, currency!) } : {}),
       seller: { name: store?.displayName, slug: store?.slug },
       buyer: view === 'SELLER' ? { firstName: buyer!.firstName } : buyer,
       // Sellers see where the order is going; the full address goes to the logistics partner only.
@@ -218,6 +230,10 @@ export class OrdersService {
         lineTotal: m(i.lineTotalMinor),
         hsCode: i.hsCode,
         countryOfOrigin: i.countryOfOrigin,
+        // The tariff line used for the duty estimate at checkout (null when only IIE's estimate applied).
+        tariff: i.tariffDescription
+          ? { hsCode: i.tariffHsCode, description: i.tariffDescription, dutyPercent: i.dutyRateBps != null ? i.dutyRateBps / 100 : null, vatPercent: i.vatRateBps != null ? i.vatRateBps / 100 : null, source: i.tariffSource }
+          : null,
       })),
       amounts: {
         productCost: m(t.subtotalMinor),

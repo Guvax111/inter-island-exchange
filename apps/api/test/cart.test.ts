@@ -61,9 +61,10 @@ describe('cart', () => {
     // The seller also buys (buyer + seller account) but cannot buy their own product.
     const both = await register(ctx, { accountType: 'BUYER_SELLER', countryCode: 'LC' });
     const bothClient = await signedIn(ctx, both.email);
-    const { buyerOnboarding, sellerOnboarding } = await import('./helpers');
+    const { buyerOnboarding, sellerOnboarding, uploadSellerDocument } = await import('./helpers');
     await bothClient.post('/me/onboarding', { buyer: buyerOnboarding('LC'), seller: sellerOnboarding('LC') }).expect(204);
     const bothSellerId = (await bothClient.get('/me')).body.sellerProfile.id;
+    await admin.post(`/admin/seller-documents/${(await uploadSellerDocument(bothClient)).body.id}/review`, { decision: 'ACCEPT' }).expect(204);
     await admin.post(`/admin/sellers/${bothSellerId}/review`, { decision: 'APPROVE' }).expect(204);
     await admin.post(`/admin/sellers/${bothSellerId}/payout-setup`, { note: 'Pilot arrangement' }).expect(204);
     const own = await createPublishedProduct(ctx, { client: bothClient }, admin, { variants: [{ sku: 'OWN-1', name: 'x', price: '5.00', quantity: 5 }] });

@@ -107,3 +107,20 @@ export type PartnerKind = (typeof PARTNER_KINDS)[number];
 
 /** A parcel weighed at pickup more than this share above the declared weight is flagged to IIE. */
 export const WEIGHT_TOLERANCE_PERCENT = 10;
+
+// ------------------------------------------------------------------ Phase 6: disputes, payouts, verification, tariffs
+
+/** Days after delivery is confirmed during which the buyer can still report a problem; then the seller is paid. */
+export const REVIEW_PERIOD_DAYS = 7;
+
+/** IIE's decision on a dispute. */
+export const DISPUTE_DECISIONS = ['FULL_REFUND', 'PARTIAL_REFUND', 'RELEASE_TO_SELLER'] as const;
+export type DisputeDecision = (typeof DISPUTE_DECISIONS)[number];
+
+/** Proof a seller must provide before IIE approves them: business registration, or a national ID. */
+export const SELLER_DOCUMENT_TYPES = ['BUSINESS_REGISTRATION', 'NATIONAL_ID'] as const;
+export type SellerDocumentType = (typeof SELLER_DOCUMENT_TYPES)[number];
+
+/** Import restrictions carried by a tariff line. */
+export const TARIFF_RESTRICTIONS = ['NONE', 'LICENCE_REQUIRED', 'PROHIBITED'] as const;
+export type TariffRestriction = (typeof TARIFF_RESTRICTIONS)[number];

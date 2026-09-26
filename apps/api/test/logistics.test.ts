@@ -175,7 +175,10 @@ describe('pilot shipment: St. Lucia -> St. Vincent', () => {
     expect(sale.shipment.proofOfDelivery).toMatchObject({ recipientName: 'Dwayne Tester', photoUrl: null, signatureUrl: null });
 
     await buyer.client.post(`/me/orders/${iieId}/confirm-delivery`).expect(204);
-    expect(await status(iieId)).toMatchObject({ status: 'DELIVERY_CONFIRMED', deliveryConfirmDueAt: null });
+    // Confirmation starts the 7-day review period before the seller is paid.
+    const confirmed = await status(iieId);
+    expect(confirmed).toMatchObject({ status: 'DISPUTE_WINDOW', deliveryConfirmDueAt: null });
+    expect(confirmed.reviewEndsAt!.getTime() - Date.now()).toBeGreaterThan(6.99 * DAY);
     await ctx.flush();
     expect(lastEmailTo(ctx, seller.email).subject).toBe(`Delivery of ${iieId} confirmed`);
   });
@@ -223,10 +226,11 @@ describe('pilot shipment: St. Lucia -> St. Vincent', () => {
     const shipmentsSvc = ctx.app.get(ShipmentsService);
     expect(await shipmentsSvc.autoConfirmDeliveries(new Date(Date.now() + 2 * DAY))).toBe(0);
     expect(await shipmentsSvc.autoConfirmDeliveries(new Date(Date.now() + 3 * DAY + 60_000))).toBeGreaterThanOrEqual(1);
-    expect((await status(a.iieId)).status).toBe('DELIVERY_CONFIRMED');
+    expect((await status(a.iieId)).status).toBe('DISPUTE_WINDOW');
     expect((await status(b.iieId)).status).toBe('DISPUTED');
     const order = (await a.buyer.client.get(`/me/orders/${a.iieId}`)).body;
-    expect(order.timeline.at(-1)).toMatchObject({ status: 'DELIVERY_CONFIRMED', reason: 'Confirmed automatically 3 days after delivery' });
+    expect(order.timeline.at(-2)).toMatchObject({ status: 'DELIVERY_CONFIRMED', reason: 'Confirmed automatically 3 days after delivery' });
+    expect(order.timeline.at(-1)).toMatchObject({ status: 'DISPUTE_WINDOW' });
     expect((await admin.get('/admin/shipments')).body.items.find((i: { iieId: string }) => i.iieId === b.iieId).issues).toContain('PROBLEM_REPORTED');
   });
 

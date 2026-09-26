@@ -110,6 +110,7 @@ export class PaymentsService {
 
   private async handle(tx: Tx, event: ProviderEvent, webhookId: string): Promise<string> {
     if (event.type.startsWith('refund.')) return this.handleRefundEvent(tx, event);
+    if (event.type.startsWith('payout.')) return this.handlePayoutEvent(tx, event);
 
     const [intent] = await tx.select().from(paymentIntents).where(eq(paymentIntents.providerIntentId, event.providerIntentId ?? '')).for('update');
     if (!intent) return 'UNKNOWN_INTENT';
@@ -151,7 +152,8 @@ export class PaymentsService {
         if (t!.status === 'CANCELLED') {
           // Paid after the order had expired or been cancelled: capture is recorded, then refunded in full.
           await this.ledger.capture(tx, t!);
-          await this.refund(tx, t!, intent.id, 'Payment arrived after the order was cancelled', 'SYSTEM', { restock: false });
+          await this.providerRefund(tx, intent, intent.amountMinor, 'Payment arrived after the order was cancelled', 'SYSTEM');
+          await this.ledger.refund(tx, t!);
           await this.engine.transition(tx, t!.id, 'REFUNDED', { type: 'SYSTEM' }, { reason: 'Late payment refunded automatically' });
           return 'LATE_PAYMENT_REFUNDED';
         }
@@ -245,28 +247,147 @@ export class PaymentsService {
   // ------------------------------------------------------------------ refunds
 
   private async refundPaid(tx: Tx, t: TransactionRow, reason: string, requestedBy: string) {
-    const [intent] = await tx.select().from(paymentIntents).where(and(eq(paymentIntents.transactionId, t.id), eq(paymentIntents.status, 'SUCCEEDED')));
-    if (!intent) throw new AppError(HttpStatus.CONFLICT, 'NO_PAYMENT', 'There is no successful payment to refund');
-    await this.refund(tx, t, intent.id, reason, requestedBy, { restock: true });
+    await this.refundInFull(tx, t, reason, requestedBy, { restock: true });
   }
 
-  /** Full refund through the provider, with the reversing ledger posting; optionally returns sold stock. */
-  private async refund(tx: Tx, t: TransactionRow, paymentIntentId: string, reason: string, requestedBy: string, opts: { restock: boolean }) {
-    const [intent] = await tx.select().from(paymentIntents).where(eq(paymentIntents.id, paymentIntentId));
+  /** Full refund through the provider, with the reversing ledger posting; the payout is cancelled. */
+  async refundInFull(tx: Tx, t: TransactionRow, reason: string, requestedBy: string, opts: { restock: boolean }) {
+    const intent = await this.succeededIntent(tx, t);
+    await this.providerRefund(tx, intent, intent.amountMinor, reason, requestedBy);
+    await this.ledger.refund(tx, t);
+    await tx.update(payouts).set({ status: 'CANCELLED', updatedAt: new Date() }).where(eq(payouts.transactionId, t.id));
+    if (opts.restock) await this.returnStock(tx, t);
+  }
+
+  /**
+   * Part of the payment back to the buyer (e.g. one item missing). Borne by the seller: at most the seller's payout,
+   * which is reduced by the same amount.
+   */
+  async refundPartially(tx: Tx, t: TransactionRow, amountMinor: bigint, reason: string, requestedBy: string) {
+    const [payout] = await tx.select().from(payouts).where(eq(payouts.transactionId, t.id)).for('update');
+    if (!payout || payout.status !== 'ON_HOLD') throw Errors.conflict('PAYOUT_NOT_HELD', 'The seller payout is no longer held');
+    if (amountMinor <= 0n || amountMinor > payout.amountMinor) {
+      throw Errors.badRequest('REFUND_TOO_LARGE', 'A partial refund must be more than zero and at most the seller payout');
+    }
+    const intent = await this.succeededIntent(tx, t);
+    await this.providerRefund(tx, intent, amountMinor, reason, requestedBy);
+    await this.ledger.partialRefund(tx, t, amountMinor);
+    await tx.update(payouts).set({ amountMinor: payout.amountMinor - amountMinor, updatedAt: new Date() }).where(eq(payouts.id, payout.id));
+  }
+
+  private async succeededIntent(tx: Tx, t: TransactionRow) {
+    const [intent] = await tx.select().from(paymentIntents).where(and(eq(paymentIntents.transactionId, t.id), eq(paymentIntents.status, 'SUCCEEDED')));
+    if (!intent) throw new AppError(HttpStatus.CONFLICT, 'NO_PAYMENT', 'There is no successful payment to refund');
+    return intent;
+  }
+
+  private async providerRefund(tx: Tx, intent: typeof paymentIntents.$inferSelect, amountMinor: bigint, reason: string, requestedBy: string) {
     const [row] = await tx
       .insert(refunds)
-      .values({ transactionId: t.id, paymentIntentId, provider: intent!.provider, amountMinor: intent!.amountMinor, currencyCode: intent!.currencyCode, reason, requestedBy })
+      .values({ transactionId: intent.transactionId, paymentIntentId: intent.id, provider: intent.provider, amountMinor, currencyCode: intent.currencyCode, reason, requestedBy })
       .returning();
     // The refund row id is the idempotency key, so a retried call cannot refund twice at the provider.
-    const result = await this.provider.refund({ providerIntentId: intent!.providerIntentId, amountMinor: intent!.amountMinor, currency: intent!.currencyCode, reason, idempotencyKey: row!.id });
+    const result = await this.provider.refund({ providerIntentId: intent.providerIntentId, amountMinor, currency: intent.currencyCode, reason, idempotencyKey: row!.id });
     await tx
       .update(refunds)
       .set({ providerRefundId: result.providerRefundId, status: result.status, completedAt: result.status === 'SUCCEEDED' ? new Date() : null })
       .where(eq(refunds.id, row!.id));
-    await tx.insert(paymentEvents).values({ paymentIntentId, type: 'refund.requested', amountMinor: intent!.amountMinor, currencyCode: intent!.currencyCode, detail: { reason, providerRefundId: result.providerRefundId } });
-    await this.ledger.refund(tx, t);
-    await tx.update(payouts).set({ status: 'CANCELLED', updatedAt: new Date() }).where(eq(payouts.transactionId, t.id));
-    if (opts.restock) await this.returnStock(tx, t);
+    await tx.insert(paymentEvents).values({ paymentIntentId: intent.id, type: 'refund.requested', amountMinor, currencyCode: intent.currencyCode, detail: { reason, providerRefundId: result.providerRefundId } });
+  }
+
+  // ------------------------------------------------------------------ seller payouts
+
+  /**
+   * Pays the seller for a transaction in PAYOUT_APPROVED. The provider pays out of the funds it holds; when it settles
+   * at once the transaction completes, otherwise it stays PAYOUT_PROCESSING until the payout webhook.
+   */
+  async releasePayout(tx: Tx, transactionId: string) {
+    const [t] = await tx.select().from(transactions).where(eq(transactions.id, transactionId)).for('update');
+    const [payout] = await tx.select().from(payouts).where(eq(payouts.transactionId, transactionId)).for('update');
+    if (!t || t.status !== 'PAYOUT_APPROVED' || !payout || !['ON_HOLD', 'APPROVED', 'FAILED'].includes(payout.status)) {
+      throw Errors.conflict('PAYOUT_NOT_RELEASABLE', 'This payout cannot be released now');
+    }
+    const [seller] = await tx.select().from(sellerProfiles).where(eq(sellerProfiles.id, payout.sellerProfileId));
+    await tx.update(payouts).set({ status: 'APPROVED', updatedAt: new Date() }).where(eq(payouts.id, payout.id));
+    await this.engine.transition(tx, t.id, 'PAYOUT_PROCESSING', { type: 'SYSTEM' }, { reason: 'Payout sent to the payment provider' });
+    if (payout.amountMinor === 0n) {
+      await this.completePayout(tx, t.id, payout.id, null);
+      return;
+    }
+    const result = await this.provider.payout({
+      reference: t.iieId,
+      amountMinor: payout.amountMinor,
+      currency: payout.currencyCode,
+      sellerReference: seller!.id,
+      idempotencyKey: payout.id,
+    });
+    await tx.update(payouts).set({ status: 'PROCESSING', providerPayoutId: result.providerPayoutId, updatedAt: new Date() }).where(eq(payouts.id, payout.id));
+    if (result.status === 'SUCCEEDED') await this.completePayout(tx, t.id, payout.id, result.providerPayoutId);
+  }
+
+  private async completePayout(tx: Tx, transactionId: string, payoutId: string, providerPayoutId: string | null) {
+    const [payout] = await tx.update(payouts).set({ status: 'PAID', releasedAt: new Date(), updatedAt: new Date() }).where(eq(payouts.id, payoutId)).returning();
+    const [t] = await tx.select().from(transactions).where(eq(transactions.id, transactionId));
+    if (payout!.amountMinor > 0n) await this.ledger.payout(tx, t!, payout!.amountMinor);
+    await this.engine.transition(tx, transactionId, 'COMPLETED', { type: 'PAYMENT' }, {
+      reason: 'Seller paid',
+      metadata: { providerPayoutId, amountMinor: payout!.amountMinor.toString() },
+    });
+  }
+
+  /**
+   * Ends review periods that have run out: the payout is approved and released. One database transaction per order,
+   * so one failure is logged and retried on the next tick without blocking the rest.
+   */
+  async releaseDuePayouts(now = new Date(), limit = 20): Promise<number> {
+    const due = await this.db
+      .select({ id: transactions.id, iieId: transactions.iieId })
+      .from(transactions)
+      .where(and(eq(transactions.status, 'DISPUTE_WINDOW'), lte(transactions.reviewEndsAt, now)))
+      .limit(limit);
+    let released = 0;
+    for (const { id, iieId } of due) {
+      try {
+        const done = await this.db.transaction(async (tx) => {
+          const [t] = await tx.select().from(transactions).where(eq(transactions.id, id)).for('update', { skipLocked: true });
+          if (!t || t.status !== 'DISPUTE_WINDOW' || !t.reviewEndsAt || t.reviewEndsAt > now) return false;
+          await this.engine.transition(tx, t.id, 'PAYOUT_APPROVED', { type: 'SYSTEM' }, { reason: 'Review period ended without a problem reported', set: { reviewEndsAt: null } });
+          await this.releasePayout(tx, t.id);
+          return true;
+        });
+        if (done) {
+          released++;
+          this.logger.log(`Released payout for ${iieId}`);
+        }
+      } catch (err) {
+        this.logger.error(`Could not release payout for ${iieId}: ${err instanceof AppError ? JSON.stringify(err.getResponse()) : String(err)}`);
+      }
+    }
+    return released;
+  }
+
+  /** IIE retries a payout the provider reported as failed. */
+  async retryPayout(iieId: string, meta: RequestMeta) {
+    const t = await this.loadByIieId(iieId);
+    await this.db.transaction(async (tx) => {
+      const [payout] = await tx.select().from(payouts).where(eq(payouts.transactionId, t.id));
+      if (payout?.status !== 'FAILED' || t.status !== 'PAYOUT_PROCESSING') throw Errors.conflict('PAYOUT_NOT_FAILED', 'Only a failed payout can be retried');
+      await this.engine.transition(tx, t.id, 'PAYOUT_APPROVED', { type: 'ADMIN', userId: meta.actorUserId ?? null }, { reason: 'Payout retried by IIE' });
+      await this.releasePayout(tx, t.id);
+      await this.audit.record(tx, meta, { action: 'payout.retried', entityType: 'transaction', entityId: t.id });
+    });
+  }
+
+  private async handlePayoutEvent(tx: Tx, event: ProviderEvent): Promise<string> {
+    const [payout] = await tx.select().from(payouts).where(eq(payouts.providerPayoutId, event.providerPayoutId ?? '')).for('update');
+    if (!payout) return 'UNKNOWN_PAYOUT';
+    if (payout.status !== 'PROCESSING') return 'IGNORED_STATE';
+    if (event.type === 'payout.succeeded') {
+      await this.completePayout(tx, payout.transactionId, payout.id, payout.providerPayoutId);
+      return 'PAYOUT_PAID';
+    }
+    await tx.update(payouts).set({ status: 'FAILED', updatedAt: new Date() }).where(eq(payouts.id, payout.id));
+    return 'PAYOUT_FAILED';
   }
 
   // ------------------------------------------------------------------ stock

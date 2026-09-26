@@ -5,7 +5,7 @@ import { desc, eq } from 'drizzle-orm';
 import { formatMinor, sandboxOutcomeSchema } from '@iie/shared';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { Database, DB } from '../db/db';
-import { currencies, paymentIntents, payouts, sellerStorefronts, transactions } from '../db/schema';
+import { currencies, paymentIntents, payouts, sellerProfiles, sellerStorefronts, transactions } from '../db/schema';
 import { DeclineSaleDto, ExchangeRateDto } from '../common/dto';
 import { Errors } from '../common/errors';
 import { toMoneyDto } from '../common/money';
@@ -174,6 +174,13 @@ export class AdminPaymentsController {
   }
 
   @RequirePermissions('payout.approve')
+  @Post('payouts/:iieId/retry')
+  @HttpCode(204)
+  async retryPayout(@Param('iieId') iieId: string, @Req() req: Request) {
+    await this.payments.retryPayout(iieId, requestMeta(req));
+  }
+
+  @RequirePermissions('payout.approve')
   @Get('payouts')
   async payoutList(@Query('status') status?: string) {
     const rows = await this.db
@@ -198,5 +205,38 @@ export class AdminPaymentsController {
   @Post('exchange-rates')
   addRate(@Body() body: ExchangeRateDto, @Req() req: Request) {
     return this.fx.add(body, requestMeta(req));
+  }
+}
+
+/** A seller's payouts: held, paid or cancelled, per order. */
+@ApiTags('seller')
+@Controller('me/payouts')
+export class SellerPayoutsController {
+  constructor(@Inject(DB) private readonly db: Database) {}
+
+  @RequirePermissions('payout.read.own')
+  @Get()
+  async list(@CurrentPrincipal() p: Principal) {
+    const [seller] = await this.db.select().from(sellerProfiles).where(eq(sellerProfiles.userId, p.userId));
+    if (!seller) return { items: [], totals: [] };
+    const rows = await this.db
+      .select({ payout: payouts, iieId: transactions.iieId, status: transactions.status, reviewEndsAt: transactions.reviewEndsAt, currency: currencies })
+      .from(payouts)
+      .innerJoin(transactions, eq(transactions.id, payouts.transactionId))
+      .innerJoin(currencies, eq(currencies.code, payouts.currencyCode))
+      .where(eq(payouts.sellerProfileId, seller.id))
+      .orderBy(desc(payouts.createdAt))
+      .limit(200);
+    return {
+      items: rows.map((r) => ({
+        iieId: r.iieId,
+        status: r.payout.status,
+        amount: toMoneyDto(r.payout.amountMinor, r.currency),
+        // When the payout is due: the end of the review period, once delivery is confirmed.
+        dueAt: r.status === 'DISPUTE_WINDOW' ? r.reviewEndsAt : null,
+        paidAt: r.payout.releasedAt,
+        providerReference: r.payout.providerPayoutId,
+      })),
+    };
   }
 }

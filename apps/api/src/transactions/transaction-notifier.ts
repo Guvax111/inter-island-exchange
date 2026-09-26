@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
-import { DELIVERY_CONFIRMATION_DAYS, formatMinor, PAYMENT_WINDOW_MINUTES, SELLER_CONFIRMATION_HOURS, type TransactionStatus } from '@iie/shared';
+import { DELIVERY_CONFIRMATION_DAYS, formatMinor, REVIEW_PERIOD_DAYS, PAYMENT_WINDOW_MINUTES, SELLER_CONFIRMATION_HOURS, type TransactionStatus } from '@iie/shared';
 import type { Tx } from '../db/db';
 import { currencies, sellerProfiles, transactions, users } from '../db/schema';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -91,7 +91,21 @@ export class TransactionNotifier {
         return;
       case 'DELIVERY_CONFIRMED':
         await toBuyer('order.delivery_confirmed', `Delivery of ${t.iieId} confirmed`, 'Thank you. The delivery is confirmed.');
-        await toSeller('sale.delivery_confirmed', `Delivery of ${t.iieId} confirmed`, 'The delivery is confirmed. Your payout is released after the review period.', true);
+        await toSeller('sale.delivery_confirmed', `Delivery of ${t.iieId} confirmed`, `The delivery is confirmed. You are paid in ${REVIEW_PERIOD_DAYS} days if the buyer reports no problem.`, true);
+        return;
+      case 'DISPUTE_WINDOW':
+        await toBuyer('order.review_period', `${REVIEW_PERIOD_DAYS} days to report a problem with ${t.iieId}`, `If something is wrong with your order, report it within ${REVIEW_PERIOD_DAYS} days. After that the seller is paid.`);
+        return;
+      case 'PARTIALLY_REFUNDED':
+        await toBuyer('order.partially_refunded', `Part of your payment for ${t.iieId} is being refunded`, 'IIE decided on your report. See the order page for the amount and details.', true);
+        await toSeller('sale.partially_refunded', `Partial refund on ${t.iieId}`, 'IIE decided on the buyer’s report. Your payout is reduced; see the order page.', true);
+        return;
+      case 'PAYOUT_APPROVED':
+        await toSeller('sale.payout_approved', `Payout approved for ${t.iieId}`, 'Your payout has been approved and sent to the payment provider.');
+        return;
+      case 'COMPLETED':
+        await toSeller('sale.paid_out', `You have been paid for ${t.iieId}`, 'The payment provider has released your payout. See Payouts in your dashboard.', true);
+        await toBuyer('order.completed', `${t.iieId} is complete`, 'Thank you for shopping with IIE.');
         return;
       case 'DISPUTED':
         await toBuyer('order.problem_reported', `We received your report about ${t.iieId}`, 'IIE will look into it and contact you. Your payment stays held until it is resolved.', true);

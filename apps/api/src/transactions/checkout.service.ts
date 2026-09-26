@@ -34,6 +34,7 @@ import { isPublicStatus } from '../catalog/visibility';
 import type { Principal } from '../rbac/principal';
 import { price } from './pricing';
 import { TransactionEngine } from './transaction-engine';
+import { TariffsService } from '../tariffs/tariffs.service';
 import { FxService } from '../payments/fx.service';
 
 /** Everything frozen into a quote. Stored as JSON (bigints as strings) and copied into the order. */
@@ -50,6 +51,8 @@ export interface QuoteSnapshot {
     unitPriceMinor: string;
     quantity: number;
     lineTotalMinor: string;
+    /** Tariff applied to this line's duty estimate, when an imported schedule covers it. */
+    tariff: { hsCode: string; description: string; dutyPercent: number | null; vatPercent: number | null; source: string; kind: 'TARIFF_SCHEDULE' | 'IIE_ESTIMATE'; restriction: string; varies: boolean } | null;
   }[];
   weightGrams: number;
   shipping: { rateId: string; serviceName: string; maxWeightGrams: number; priceMinor: string; isPlaceholder: boolean };
@@ -78,6 +81,7 @@ export class CheckoutService {
     private readonly engine: TransactionEngine,
     private readonly audit: AuditService,
     private readonly fx: FxService,
+    private readonly tariffs: TariffsService,
   ) {}
 
   async quote(principal: Principal, sellerSlug: string, addressId: string) {
@@ -163,14 +167,34 @@ export class CheckoutService {
     const feeBps = feeRule?.percentBps ?? 0;
     const feePayer = (sellerRow.storefront.feePayer ?? feeRule?.defaultPayer ?? 'BUYER') as FeePayer;
     const rules = await this.db.select().from(dutyEstimates).where(eq(dutyEstimates.destinationCountryId, destination.id));
+    // Imported tariff schedules take precedence over IIE's estimate rules, per HS code and origin.
+    const tariffs = await this.tariffs.resolveForDestination(
+      destination.id,
+      lines.map((l) => ({ hsCode: l.product.hsCode, originIsCaricom: l.originBloc === 'CARICOM' })),
+    );
+    const tariffFor = (l: (typeof lines)[number]) => (l.product.hsCode ? (tariffs.get(`${l.product.hsCode}|${l.originBloc === 'CARICOM'}`) ?? null) : null);
+    const prohibited = lines.filter((l) => tariffFor(l)?.restriction === 'PROHIBITED');
+    if (prohibited.length) {
+      throw problem('NOT_IMPORTABLE', `${prohibited.map((l) => l.product.title).join(', ')} cannot be imported into ${destination.name}`, prohibited.map((l) => ({ sku: l.variant.sku })));
+    }
+    const scheduleRules = lines
+      .map((l) => ({ l, t: tariffFor(l) }))
+      .filter(({ t }) => t?.source.kind === 'TARIFF_SCHEDULE' && t.generalDutyPercent !== null)
+      .map(({ l, t }) => ({
+        hsPrefix: l.product.hsCode!,
+        otherOriginDutyBps: Math.round(t!.generalDutyPercent! * 100),
+        caricomOriginDutyBps: Math.round((t!.caricomDutyPercent ?? t!.generalDutyPercent!) * 100),
+        vatBps: Math.round((t!.vatPercent ?? 0) * 100),
+      }));
 
     const priced = price({
       lines: lines.map((l) => ({ lineTotalMinor: l.variant.priceMinor * BigInt(l.quantity), hsCode: l.product.hsCode, originIsCaricom: l.originBloc === 'CARICOM' })),
       shippingMinor: rate.priceMinor,
       feeBps,
       feePayer,
-      dutyRules: rules,
+      dutyRules: [...rules, ...scheduleRules],
     });
+    const pricedBySchedule = (l: (typeof lines)[number]) => scheduleRules.some((r) => r.hsPrefix === l.product.hsCode);
 
     // 8. Buyer limits for their verification level, where configured.
     const [limit] = await this.db
@@ -195,6 +219,20 @@ export class CheckoutService {
         unitPriceMinor: l.variant.priceMinor.toString(),
         quantity: l.quantity,
         lineTotalMinor: (l.variant.priceMinor * BigInt(l.quantity)).toString(),
+        tariff: (() => {
+          const t = tariffFor(l);
+          if (!t) return null;
+          return {
+            hsCode: t.matchedHsCode,
+            description: t.description,
+            dutyPercent: t.applicableDutyPercent,
+            vatPercent: t.vatPercent,
+            source: t.source.name,
+            kind: t.source.kind,
+            restriction: t.restriction,
+            varies: t.varies,
+          };
+        })(),
       })),
       weightGrams,
       shipping: { rateId: rate.id, serviceName: rate.serviceName, maxWeightGrams: rate.maxWeightGrams, priceMinor: rate.priceMinor.toString(), isPlaceholder: rate.isPlaceholder },
@@ -204,7 +242,8 @@ export class CheckoutService {
         vatMinor: priced.vatEstimateMinor.toString(),
         totalMinor: priced.dutiesEstimateMinor.toString(),
         incomplete: priced.dutiesIncomplete,
-        isPlaceholder: rules.some((r) => r.isPlaceholder),
+        // Placeholder only if some line was estimated with a placeholder rule rather than an imported tariff.
+        isPlaceholder: lines.some((l) => !pricedBySchedule(l)) && rules.some((r) => r.isPlaceholder),
         notes: rules.find((r) => r.hsPrefix === '')?.notes ?? '',
       },
       subtotalMinor: priced.subtotalMinor.toString(),
@@ -281,6 +320,11 @@ export class CheckoutService {
           quantity: l.quantity,
           lineTotalMinor: BigInt(l.lineTotalMinor),
           currencyCode: quote.currencyCode,
+          tariffDescription: l.tariff?.description ?? null,
+          tariffHsCode: l.tariff?.hsCode ?? null,
+          dutyRateBps: l.tariff?.dutyPercent != null ? Math.round(l.tariff.dutyPercent * 100) : null,
+          vatRateBps: l.tariff?.vatPercent != null ? Math.round(l.tariff.vatPercent * 100) : null,
+          tariffSource: l.tariff?.source ?? null,
         })),
       );
 

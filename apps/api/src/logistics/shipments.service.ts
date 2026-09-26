@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { aliasedTable, and, asc, desc, eq, inArray, lte, or } from 'drizzle-orm';
-import { DELIVERY_CONFIRMATION_DAYS, parseDecimalToMinor, WEIGHT_TOLERANCE_PERCENT, type ShipmentStep, type TransactionStatus } from '@iie/shared';
+import { DELIVERY_CONFIRMATION_DAYS, parseDecimalToMinor, REVIEW_PERIOD_DAYS, WEIGHT_TOLERANCE_PERCENT, type ShipmentStep, type TransactionStatus } from '@iie/shared';
 import { Database, DB, Tx } from '../db/db';
 import {
   addresses,
@@ -227,6 +227,7 @@ export class ShipmentsService {
         description: `${i.title} (${i.variantName})`,
         sku: i.sku,
         hsCode: i.hsCode,
+        tariffDescription: i.tariffDescription,
         countryOfOrigin: i.countryOfOrigin,
         countryOfOriginName: bloc.get(i.countryOfOrigin)?.name ?? i.countryOfOrigin,
         caricomOrigin: bloc.get(i.countryOfOrigin)?.bloc === 'CARICOM',
@@ -348,18 +349,17 @@ export class ShipmentsService {
     await this.db.transaction(async (tx) => {
       await this.engine.transition(tx, t.id, 'DELIVERY_CONFIRMED', { type: 'BUYER', userId: principal.userId }, { reason: 'The buyer confirmed the delivery', set: { deliveryConfirmDueAt: null }, expectedVersion: t.version });
       await this.shipmentNote(tx, t.id, 'DELIVERY_CONFIRMED', 'BUYER', principal.userId, null);
+      await this.startReview(tx, t.id);
       await this.audit.record(tx, meta, { action: 'order.delivery_confirmed', entityType: 'transaction', entityId: t.id });
     });
   }
 
-  /** The buyer reports a problem instead of confirming. Stops the automatic confirmation; IIE follows up. */
-  async reportProblem(principal: Principal, iieId: string, reason: string, meta: RequestMeta) {
-    const t = await this.loadTransaction(iieId);
-    if (t.buyerUserId !== principal.userId) throw Errors.notFound('Order');
-    await this.db.transaction(async (tx) => {
-      await this.engine.transition(tx, t.id, 'DISPUTED', { type: 'BUYER', userId: principal.userId }, { reason, set: { deliveryConfirmDueAt: null }, expectedVersion: t.version });
-      await this.shipmentNote(tx, t.id, 'PROBLEM_REPORTED', 'BUYER', principal.userId, reason);
-      await this.audit.record(tx, meta, { action: 'order.problem_reported', entityType: 'transaction', entityId: t.id, after: { reason } });
+  /** After delivery is confirmed the buyer has a review period to report a problem; then the seller is paid. */
+  private async startReview(tx: Tx, transactionId: string) {
+    const ends = new Date(Date.now() + REVIEW_PERIOD_DAYS * 24 * 3600_000);
+    await this.engine.transition(tx, transactionId, 'DISPUTE_WINDOW', { type: 'SYSTEM' }, {
+      reason: `Review period of ${REVIEW_PERIOD_DAYS} days before the seller is paid`,
+      set: { reviewEndsAt: ends },
     });
   }
 
@@ -382,6 +382,7 @@ export class ShipmentsService {
           const reason = `Confirmed automatically ${DELIVERY_CONFIRMATION_DAYS} days after delivery`;
           await this.engine.transition(tx, t.id, 'DELIVERY_CONFIRMED', { type: 'SYSTEM' }, { reason, set: { deliveryConfirmDueAt: null } });
           await this.shipmentNote(tx, t.id, 'DELIVERY_CONFIRMED', 'SYSTEM', null, reason);
+          await this.startReview(tx, t.id);
           return true;
         });
         if (done) {
@@ -588,7 +589,7 @@ export class ShipmentsService {
     await this.outbox.enqueue(tx, EVENTS.partnerUpdate, { email: partner.contactEmail, firstName: partner.name, subject: title, message: body, path: link });
   }
 
-  private async shipmentNote(tx: Tx, transactionId: string, step: string, actorType: string, userId: string | null, note: string | null) {
+  async shipmentNote(tx: Tx, transactionId: string, step: string, actorType: string, userId: string | null, note: string | null) {
     const [s] = await tx.select().from(shipments).where(eq(shipments.transactionId, transactionId));
     if (s) await tx.insert(shipmentEvents).values({ shipmentId: s.id, step, actorType, actorUserId: userId, note });
   }

@@ -5,6 +5,13 @@ import {
   declineSaleSchema,
   exchangeRateSchema,
   deliveryProofSchema,
+  disputeDecisionSchema,
+  disputeMessageSchema,
+  sellerDocumentReviewSchema,
+  sellerDocumentUploadSchema,
+  tariffImportSchema,
+  tariffLookupSchema,
+  tariffSearchSchema,
   partnerCreateSchema,
   partnerLaneSchema,
   partnerMemberInviteSchema,
@@ -136,3 +143,12 @@ export class ShipmentStepDto extends createZodDto(shipmentStepSchema) {}
 export class DeliveryProofDto extends createZodDto(deliveryProofSchema) {}
 export class ReportProblemDto extends createZodDto(reportProblemSchema) {}
 export class AdminShipmentQueryDto extends createZodDto(z.object({ view: z.enum(['attention', 'all']).default('attention') })) {}
+
+// Phase 6
+export class DisputeMessageDto extends createZodDto(disputeMessageSchema) {}
+export class DisputeDecisionDto extends createZodDto(disputeDecisionSchema) {}
+export class SellerDocumentUploadDto extends createZodDto(sellerDocumentUploadSchema) {}
+export class SellerDocumentReviewDto extends createZodDto(sellerDocumentReviewSchema) {}
+export class TariffImportDto extends createZodDto(tariffImportSchema) {}
+export class TariffLookupDto extends createZodDto(tariffLookupSchema) {}
+export class TariffSearchDto extends createZodDto(tariffSearchSchema) {}

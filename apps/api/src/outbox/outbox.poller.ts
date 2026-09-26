@@ -7,8 +7,8 @@ import { OutboxService } from './outbox.service';
 
 /**
  * Background jobs run by the worker (or in-process locally): deliver outbox events and cancel orders whose
- * payment window has expired, refund paid orders the seller did not confirm in time, and confirm deliveries the buyer
- * did not confirm or dispute in time. Each job is safe to run
+ * payment window has expired, refund paid orders the seller did not confirm in time, confirm deliveries the buyer
+ * did not confirm or dispute in time, and pay sellers when the review period ends. Each job is safe to run
  * in several processes at once.
  */
 @Injectable()
@@ -30,6 +30,7 @@ export class OutboxPoller implements OnApplicationShutdown {
     await this.orders.expireOverdue();
     await this.payments.refundUnconfirmed();
     await this.shipments.autoConfirmDeliveries();
+    await this.payments.releaseDuePayouts();
     while ((await this.outbox.processBatch()) > 0) {
       // keep draining while there is work
     }

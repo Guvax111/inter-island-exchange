@@ -56,7 +56,7 @@ export function toProductPayload(f: ProductForm) {
 
 export function ProductFields({ form, onChange, errors }: { form: ProductForm; onChange: (f: ProductForm) => void; errors: Record<string, string> }) {
   const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: () => api<{ items: CategoryNode[] }>('/categories').then((r) => flattenCategories(r.items)) });
-  const { data: countries } = useQuery({ queryKey: ['countries-all'], queryFn: () => api<{ items: { code: string; name: string }[] }>('/countries').then((r) => r.items) });
+  const { data: countries } = useQuery({ queryKey: ['countries-origins'], queryFn: () => api<{ items: { code: string; name: string }[] }>('/countries?scope=origins').then((r) => r.items) });
   const set = (k: keyof ProductForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange({ ...form, [k]: e.target.value });
 
   return (

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, FEE_PAYERS, MAX_CART_QUANTITY, PARTNER_KINDS, PARTY_TYPES, PRODUCT_STATUSES, TRANSACTION_STATUSES } from './statuses';
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, DISPUTE_DECISIONS, FEE_PAYERS, MAX_CART_QUANTITY, PARTNER_KINDS, PARTY_TYPES, PRODUCT_STATUSES, SELLER_DOCUMENT_TYPES, TRANSACTION_STATUSES } from './statuses';
 import { ROLES } from './rbac';
 
 export const PASSWORD_MIN_LENGTH = 12;
@@ -404,3 +404,56 @@ export const deliveryProofSchema = z.object({
 });
 
 export const reportProblemSchema = z.object({ reason: z.string().trim().min(10).max(1000) });
+
+// ------------------------------------------------------------------ Phase 6: disputes, payouts, verification, tariffs
+
+export const disputeMessageSchema = z.object({ body: z.string().trim().min(2).max(2000) });
+
+export const disputeDecisionSchema = z
+  .object({
+    decision: z.enum(DISPUTE_DECISIONS),
+    /** PARTIAL_REFUND: amount returned to the buyer, e.g. "22.50" (at most the seller's payout). */
+    refundAmount: priceInputSchema.optional(),
+    /** Whether the buyer must send the goods back (decided case by case). */
+    returnRequired: z.boolean().default(false),
+    returnInstructions: z.string().trim().max(1000).optional(),
+    /** Explanation shown to the buyer and the seller. */
+    note: z.string().trim().min(10).max(2000),
+  })
+  .superRefine((v, ctx) => {
+    if (v.decision === 'PARTIAL_REFUND' && !v.refundAmount) ctx.addIssue({ code: 'custom', path: ['refundAmount'], message: 'Enter the amount to refund' });
+    if (v.returnRequired && !v.returnInstructions) ctx.addIssue({ code: 'custom', path: ['returnInstructions'], message: 'Say how and where the goods should be returned' });
+  });
+
+export const sellerDocumentUploadSchema = z.object({ type: z.enum(SELLER_DOCUMENT_TYPES) });
+export const sellerDocumentReviewSchema = z.object({ decision: z.enum(['ACCEPT', 'REJECT']), note: z.string().trim().max(1000).optional() });
+
+/** HS code as entered: digits with optional dots or spaces, 4 to 12 digits once normalised. */
+export const hsLookupCodeSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s.]/g, ''))
+  .pipe(z.string().regex(/^\d{4,12}$/, 'Use 4 to 12 digits, e.g. 9619.00'));
+
+export const tariffLookupSchema = z.object({
+  country: countryCodeSchema,
+  hs: hsLookupCodeSchema,
+  /** Country the goods come from; CARICOM origin may attract a different rate. */
+  origin: countryCodeSchema.optional(),
+});
+export const tariffSearchSchema = z.object({ country: countryCodeSchema, q: z.string().trim().min(2).max(80) });
+
+export const tariffImportSchema = z.object({
+  name: z.string().trim().min(3).max(150),
+  source: z.string().trim().min(2).max(200),
+  /** ISO date the schedule takes effect, e.g. 2026-10-01 */
+  effectiveFrom: z.iso.date(),
+  /** Countries a single-rate file applies to. Files with one rate column per country do not need this. */
+  countryCodes: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean) : [])),
+  /** Duty for goods of CARICOM origin when the file has no such column (CARICOM free circulation). */
+  caricomDefaultPercent: z.coerce.number().min(0).max(100).default(0),
+});

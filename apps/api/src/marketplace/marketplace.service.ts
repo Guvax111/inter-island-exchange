@@ -9,6 +9,7 @@ import { CategoriesService } from '../catalog/categories.service';
 import { ProductsService } from '../catalog/products.service';
 import { PUBLIC_PRODUCT_JOINS, publicProductWhere, publicSellerWhere } from '../catalog/visibility';
 import { PRODUCT_SEARCH, ProductSearchProvider } from './search.provider';
+import { TariffsService } from '../tariffs/tariffs.service';
 
 @Injectable()
 export class MarketplaceService {
@@ -17,6 +18,7 @@ export class MarketplaceService {
     @Inject(PRODUCT_SEARCH) private readonly searchProvider: ProductSearchProvider,
     private readonly categories: CategoriesService,
     private readonly products: ProductsService,
+    private readonly tariffs: TariffsService,
   ) {}
 
   async search(input: ProductSearchInput) {
@@ -73,6 +75,10 @@ export class MarketplaceService {
       seller: this.sellerCard(row.storefront!, row.country),
       shipsFrom: { code: row.country.isoAlpha2, name: row.country.name },
       shipsTo: destinations,
+      // Import information for each country the product can be shipped to, from IIE's tariff schedules.
+      importInfo: detail.hsCode
+        ? await Promise.all(destinations.map(async (d) => ({ destination: d, tariff: await this.tariffs.lookup(d.code, detail.hsCode!, detail.countryOfOrigin?.code) })))
+        : [],
     };
   }
 

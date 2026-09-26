@@ -204,6 +204,13 @@ export function testImage(format: 'jpeg' | 'png' = 'jpeg', width = 800, height =
   return sharp({ create: { width, height, channels: 3, background: { r: 14, g: 116, b: 144 } } })[format]().toBuffer();
 }
 
+/** A tiny valid-looking PDF, as a seller's certificate of registration. */
+export const testPdf = () => Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+
+export function uploadSellerDocument(client: Client, type = 'BUSINESS_REGISTRATION', file: Buffer = testPdf(), name = 'certificate-of-registration.pdf') {
+  return client.agent.post('/api/v1/me/seller/documents').set('x-csrf-token', client.csrf).field('type', type).attach('file', file, name);
+}
+
 export async function createActiveSeller(ctx: TestContext, admin: Client, opts: { countryCode?: string; name?: string } = {}) {
   const countryCode = opts.countryCode ?? 'LC';
   const { id: userId, email } = await register(ctx, { accountType: 'SELLER', countryCode, email: uniqueEmail('seller') });
@@ -212,6 +219,10 @@ export async function createActiveSeller(ctx: TestContext, admin: Client, opts: 
   const ob = await client.post('/me/onboarding', { seller: onboarding });
   if (ob.status !== 204) throw new Error(`seller onboarding failed ${ob.status} ${JSON.stringify(ob.body)}`);
   const sellerId = (await client.get('/me')).body.sellerProfile.id as string;
+  // Sellers must give proof of business registration (or a national ID), accepted by IIE, before approval.
+  const doc = await uploadSellerDocument(client);
+  if (doc.status !== 201) throw new Error(`document upload failed ${doc.status} ${JSON.stringify(doc.body)}`);
+  await admin.post(`/admin/seller-documents/${doc.body.id}/review`, { decision: 'ACCEPT' }).expect(204);
   const approve = await admin.post(`/admin/sellers/${sellerId}/review`, { decision: 'APPROVE' });
   if (approve.status !== 204) throw new Error(`approve failed ${approve.status} ${JSON.stringify(approve.body)}`);
   await admin.post(`/admin/sellers/${sellerId}/payout-setup`, { note: 'Pilot: bank transfer arranged offline' }).expect(204);

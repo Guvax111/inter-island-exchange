@@ -1,13 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
-import { AdminSellerQueryDto, PayoutSetupDto, ReasonDto, ReviewDecisionDto, SellerProfileUpdateDto, StorefrontUpdateDto } from '../common/dto';
+import type { Request, Response } from 'express';
+import { AdminSellerQueryDto, PayoutSetupDto, ReasonDto, ReviewDecisionDto, SellerDocumentReviewDto, SellerDocumentUploadDto, SellerProfileUpdateDto, StorefrontUpdateDto } from '../common/dto';
 import { requestMeta } from '../common/request';
 import type { Principal } from '../rbac/principal';
 import { CurrentPrincipal } from '../auth/current-principal.decorator';
 import { RequirePermissions } from '../auth/decorators';
 import { UPLOAD } from '../catalog/catalog.controllers';
 import { SellersService } from './sellers.service';
+import { SellerDocumentsService } from './seller-documents.service';
 
 @ApiTags('seller')
 @Controller('me')
@@ -92,5 +94,47 @@ export class AdminSellersController {
   @HttpCode(204)
   async reinstate(@CurrentPrincipal() p: Principal, @Param('id', ParseUUIDPipe) id: string, @Body() body: ReasonDto, @Req() req: Request) {
     await this.sellers.reinstate(p, id, body.reason, requestMeta(req));
+  }
+}
+
+const DOCUMENT_UPLOAD = FileInterceptor('file', { limits: { fileSize: 12 * 1024 * 1024, files: 1 } });
+
+/** Proof of business registration or national ID: uploaded by the seller, reviewed by IIE. */
+@ApiTags('seller')
+@Controller()
+export class SellerDocumentsController {
+  constructor(private readonly documents: SellerDocumentsService) {}
+
+  @RequirePermissions('product.manage.own')
+  @Get('me/seller/documents')
+  mine(@CurrentPrincipal() p: Principal) {
+    return this.documents.listMine(p);
+  }
+
+  @RequirePermissions('product.manage.own')
+  @Post('me/seller/documents')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(DOCUMENT_UPLOAD)
+  upload(@CurrentPrincipal() p: Principal, @Body() body: SellerDocumentUploadDto, @UploadedFile() file: Express.Multer.File | undefined, @Req() req: Request) {
+    return this.documents.upload(p, body.type, file, requestMeta(req));
+  }
+
+  /** Download for the seller or a reviewer. Always an attachment, never rendered in the page. */
+  @RequirePermissions('profile.read.own')
+  @Get('seller-documents/:id')
+  async download(@CurrentPrincipal() p: Principal, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const file = await this.documents.download(p, id);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.fileName.replace(/"/g, '')}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.send(file.body);
+  }
+
+  @RequirePermissions('seller.review')
+  @Post('admin/seller-documents/:id/review')
+  @HttpCode(204)
+  async review(@CurrentPrincipal() p: Principal, @Param('id', ParseUUIDPipe) id: string, @Body() body: SellerDocumentReviewDto, @Req() req: Request) {
+    await this.documents.review(p, id, body.decision, body.note, requestMeta(req));
   }
 }

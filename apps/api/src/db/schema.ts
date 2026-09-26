@@ -15,6 +15,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -363,7 +364,7 @@ export const mediaAssets = pgTable(
     bytes: integer('bytes').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [check('media_assets_kind_chk', inList('kind', ['PRODUCT_IMAGE', 'STORE_LOGO', 'DELIVERY_PHOTO', 'DELIVERY_SIGNATURE'])), index('media_assets_owner_idx').on(t.ownerUserId)],
+  (t) => [check('media_assets_kind_chk', inList('kind', ['PRODUCT_IMAGE', 'STORE_LOGO', 'DELIVERY_PHOTO', 'DELIVERY_SIGNATURE', 'DISPUTE_EVIDENCE'])), index('media_assets_owner_idx').on(t.ownerUserId)],
 );
 
 export const sellerStorefronts = pgTable('seller_storefronts', {
@@ -657,6 +658,12 @@ export const orderItems = pgTable(
     hsCode: varchar('hs_code', { length: 10 }),
     countryOfOrigin: char('country_of_origin', { length: 2 }).notNull(),
     unitWeightGrams: integer('unit_weight_grams').notNull(),
+    /** Tariff applied to the duty estimate, as at checkout (null when only IIE's estimate rules applied). */
+    tariffDescription: text('tariff_description'),
+    tariffHsCode: varchar('tariff_hs_code', { length: 12 }),
+    dutyRateBps: integer('duty_rate_bps'),
+    vatRateBps: integer('vat_rate_bps'),
+    tariffSource: varchar('tariff_source', { length: 200 }),
     unitPriceMinor: bigint('unit_price_minor', { mode: 'bigint' }).notNull(),
     quantity: integer('quantity').notNull(),
     lineTotalMinor: bigint('line_total_minor', { mode: 'bigint' }).notNull(),
@@ -715,6 +722,8 @@ export const transactions = pgTable(
     sellerConfirmDueAt: timestamp('seller_confirm_due_at', { withTimezone: true }),
     /** After delivery: when the order is confirmed automatically if the buyer has not confirmed or reported a problem. */
     deliveryConfirmDueAt: timestamp('delivery_confirm_due_at', { withTimezone: true }),
+    /** End of the review period after delivery is confirmed; the seller is paid when it ends. */
+    reviewEndsAt: timestamp('review_ends_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -726,6 +735,7 @@ export const transactions = pgTable(
     index('transactions_payment_due_idx').on(t.paymentDueAt).where(sql`status = 'AWAITING_PAYMENT'`),
     index('transactions_seller_due_idx').on(t.sellerConfirmDueAt).where(sql`status = 'AWAITING_SELLER_CONFIRMATION'`),
     index('transactions_delivery_due_idx').on(t.deliveryConfirmDueAt).where(sql`status = 'DELIVERED'`),
+    index('transactions_review_ends_idx').on(t.reviewEndsAt).where(sql`status = 'DISPUTE_WINDOW'`),
   ],
 );
 
@@ -881,7 +891,7 @@ export const payouts = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    check('payouts_status_chk', inList('status', ['ON_HOLD', 'APPROVED', 'PROCESSING', 'PAID', 'CANCELLED'])),
+    check('payouts_status_chk', inList('status', ['ON_HOLD', 'APPROVED', 'PROCESSING', 'PAID', 'FAILED', 'CANCELLED'])),
     index('payouts_seller_idx').on(t.sellerProfileId, t.status),
   ],
 );
@@ -1047,3 +1057,130 @@ export const deliveryProofs = pgTable('delivery_proofs', {
   recordedBy: uuid('recorded_by').notNull().references(() => users.id),
   createdAt: createdAt(),
 });
+
+// ---------------------------------------------------------------- Phase 6: disputes, payouts, verification, tariffs
+
+/** A problem reported by the buyer, decided by IIE. One per transaction. */
+export const disputes = pgTable(
+  'disputes',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().unique().references(() => transactions.id),
+    openedBy: uuid('opened_by').notNull().references(() => users.id),
+    reason: text('reason').notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('OPEN'),
+    decision: varchar('decision', { length: 30 }),
+    refundAmountMinor: bigint('refund_amount_minor', { mode: 'bigint' }),
+    returnRequired: boolean('return_required').notNull().default(false),
+    returnInstructions: text('return_instructions'),
+    decisionNote: text('decision_note'),
+    decidedBy: uuid('decided_by').references(() => users.id),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('disputes_status_chk', inList('status', ['OPEN', 'RESOLVED'])),
+    check('disputes_decision_chk', sql`${t.decision} is null or ${t.decision} in ('FULL_REFUND', 'PARTIAL_REFUND', 'RELEASE_TO_SELLER')`),
+    index('disputes_status_idx').on(t.status, t.createdAt),
+  ],
+);
+
+/** Messages between the buyer, the seller and IIE on a dispute (append-only). */
+export const disputeMessages = pgTable(
+  'dispute_messages',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    disputeId: uuid('dispute_id').notNull().references(() => disputes.id),
+    authorUserId: uuid('author_user_id').notNull().references(() => users.id),
+    authorRole: varchar('author_role', { length: 10 }).notNull(),
+    body: text('body').notNull(),
+    mediaId: uuid('media_id').references(() => mediaAssets.id),
+    createdAt: createdAt(),
+  },
+  (t) => [check('dispute_messages_role_chk', inList('author_role', ['BUYER', 'SELLER', 'IIE'])), index('dispute_messages_dispute_idx').on(t.disputeId, t.id)],
+);
+
+/** Proof of business registration or national ID, required before a seller is approved. Files are private. */
+export const sellerDocuments = pgTable(
+  'seller_documents',
+  {
+    id: id(),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    type: varchar('type', { length: 30 }).notNull(),
+    storageKey: varchar('storage_key', { length: 200 }).notNull().unique(),
+    contentType: varchar('content_type', { length: 50 }).notNull(),
+    bytes: integer('bytes').notNull(),
+    sha256: char('sha256', { length: 64 }).notNull(),
+    originalName: varchar('original_name', { length: 200 }).notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('PENDING'),
+    reviewNote: text('review_note'),
+    reviewedBy: uuid('reviewed_by').references(() => users.id),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    uploadedBy: uuid('uploaded_by').notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('seller_documents_type_chk', inList('type', ['BUSINESS_REGISTRATION', 'NATIONAL_ID'])),
+    check('seller_documents_status_chk', inList('status', ['PENDING', 'ACCEPTED', 'REJECTED'])),
+    index('seller_documents_seller_idx').on(t.sellerProfileId),
+  ],
+);
+
+/** One upload of a tariff file (e.g. the CARICOM Common External Tariff), producing one schedule per country. */
+export const tariffImports = pgTable('tariff_imports', {
+  id: id(),
+  name: varchar('name', { length: 150 }).notNull(),
+  source: varchar('source', { length: 200 }).notNull(),
+  fileName: varchar('file_name', { length: 200 }).notNull(),
+  effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('DRAFT'),
+  /** Rows read, lines created per country, and rows skipped with their reasons. */
+  summary: jsonb('summary').$type<Record<string, unknown>>().notNull().default({}),
+  importedBy: uuid('imported_by').notNull().references(() => users.id),
+  activatedBy: uuid('activated_by').references(() => users.id),
+  activatedAt: timestamp('activated_at', { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [check('tariff_imports_status_chk', inList('status', ['DRAFT', 'ACTIVE', 'DISCARDED']))]);
+
+/** A country's tariff from one import. Exactly one ACTIVE schedule per country at a time. */
+export const tariffSchedules = pgTable(
+  'tariff_schedules',
+  {
+    id: id(),
+    importId: uuid('import_id').notNull().references(() => tariffImports.id),
+    countryId: uuid('country_id').notNull().references(() => countries.id),
+    status: varchar('status', { length: 20 }).notNull().default('DRAFT'),
+    lineCount: integer('line_count').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('tariff_schedules_status_chk', inList('status', ['DRAFT', 'ACTIVE', 'RETIRED'])),
+    unique('tariff_schedules_import_country_uq').on(t.importId, t.countryId),
+    uniqueIndex('tariff_schedules_one_active_uq').on(t.countryId).where(sql`status = 'ACTIVE'`),
+  ],
+);
+
+/** HS heading or subheading with its description, duty rates and import restriction for one country. */
+export const tariffLines = pgTable(
+  'tariff_lines',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    scheduleId: uuid('schedule_id').notNull().references(() => tariffSchedules.id),
+    hsCode: varchar('hs_code', { length: 12 }).notNull(),
+    description: text('description').notNull(),
+    /** Duty on goods from outside CARICOM (e.g. the CET rate); null for description-only headings. */
+    dutyBps: integer('duty_bps'),
+    /** Duty on goods of CARICOM origin. */
+    caricomDutyBps: integer('caricom_duty_bps'),
+    vatBps: integer('vat_bps'),
+    /** The rate as printed, kept when it cannot be expressed as a percentage (e.g. "5% or $1.00/kg"). */
+    rateText: varchar('rate_text', { length: 100 }),
+    restriction: varchar('restriction', { length: 20 }).notNull().default('NONE'),
+    notes: text('notes'),
+  },
+  (t) => [
+    check('tariff_lines_restriction_chk', inList('restriction', ['NONE', 'LICENCE_REQUIRED', 'PROHIBITED'])),
+    unique('tariff_lines_schedule_hs_uq').on(t.scheduleId, t.hsCode),
+  ],
+);

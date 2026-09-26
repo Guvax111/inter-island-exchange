@@ -10,7 +10,6 @@ import {
   PartnerMemberInviteDto,
   PartnerUpdateDto,
   ReadyForPickupDto,
-  ReportProblemDto,
   ShipmentAssignDto,
   ShipmentStepDto,
 } from '../common/dto';
@@ -65,13 +64,6 @@ export class BuyerDeliveryController {
   @HttpCode(204)
   async confirm(@CurrentPrincipal() p: Principal, @Param('iieId') iieId: string, @Req() req: Request) {
     await this.shipments.confirmDelivery(p, iieId, requestMeta(req));
-  }
-
-  @RequirePermissions('dispute.create.own')
-  @Post(':iieId/report-problem')
-  @HttpCode(204)
-  async report(@CurrentPrincipal() p: Principal, @Param('iieId') iieId: string, @Body() body: ReportProblemDto, @Req() req: Request) {
-    await this.shipments.reportProblem(p, iieId, body.reason, requestMeta(req));
   }
 }
 

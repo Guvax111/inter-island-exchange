@@ -54,6 +54,22 @@ export class LedgerService {
     ]);
   }
 
+  /** Part of the payment returned to the buyer, borne by the seller: reduces what the seller is owed. */
+  partialRefund(tx: Tx, t: TransactionRow, amountMinor: bigint) {
+    return this.post(tx, t.id, t.transactionCurrency, `Partial refund for ${t.iieId}`, [
+      { account: 'seller_payable', direction: 'DEBIT', amountMinor },
+      { account: 'provider_held', direction: 'CREDIT', amountMinor },
+    ]);
+  }
+
+  /** The provider pays the seller out of the funds it holds. */
+  payout(tx: Tx, t: TransactionRow, amountMinor: bigint) {
+    return this.post(tx, t.id, t.transactionCurrency, `Seller payout for ${t.iieId}`, [
+      { account: 'seller_payable', direction: 'DEBIT', amountMinor },
+      { account: 'provider_held', direction: 'CREDIT', amountMinor },
+    ]);
+  }
+
   async entries(transactionId: string) {
     const rows = await this.db.select().from(ledgerEntries).where(eq(ledgerEntries.transactionId, transactionId)).orderBy(asc(ledgerEntries.id));
     const balances = new Map<string, bigint>();

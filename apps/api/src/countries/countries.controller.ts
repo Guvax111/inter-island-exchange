@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { CountryCreateDto, CountryUpdateDto, LaneDto } from '../common/dto';
@@ -14,9 +14,10 @@ export class CountriesController {
   constructor(private readonly countries: CountriesService) {}
 
   @Public()
+  /** CARICOM countries. `?scope=origins` adds countries used only as a product's country of origin. */
   @Get('countries')
-  async list() {
-    return { items: await this.countries.list() };
+  async list(@Query('scope') scope?: string) {
+    return { items: await this.countries.list(scope === 'origins') };
   }
 
   @Public()

@@ -31,7 +31,7 @@ import { CategoriesService } from './catalog/categories.service';
 import { ProductsService } from './catalog/products.service';
 import { AdminCategoriesController, AdminProductsController, CategoriesController, SellerProductsController } from './catalog/catalog.controllers';
 import { SellersService } from './sellers/sellers.service';
-import { AdminSellersController, SellerSelfController } from './sellers/sellers.controllers';
+import { AdminSellersController, SellerSelfController, SellerDocumentsController } from './sellers/sellers.controllers';
 import { PostgresProductSearch, PRODUCT_SEARCH } from './marketplace/search.provider';
 import { MarketplaceService } from './marketplace/marketplace.service';
 import { MarketplaceController } from './marketplace/marketplace.controller';
@@ -48,11 +48,16 @@ import { AdminTransactionsController, BuyerOrdersController, NotificationsContro
 import { createPaymentProvider, PAYMENT_PROVIDER, type PaymentProvider } from './payments/payment.provider';
 import { PaymentsService } from './payments/payments.service';
 import { PartnersService } from './logistics/partners.service';
+import { DisputesService } from './disputes/disputes.service';
+import { TariffsService } from './tariffs/tariffs.service';
+import { AdminTariffsController, TariffsController } from './tariffs/tariffs.controllers';
+import { SellerDocumentsService } from './sellers/seller-documents.service';
+import { DisputesController } from './disputes/disputes.controllers';
 import { ShipmentsService } from './logistics/shipments.service';
 import { AdminLogisticsController, BuyerDeliveryController, CountryPartnersController, PartnerPortalController, SellerShipmentController } from './logistics/logistics.controllers';
 import { LedgerService } from './payments/ledger.service';
 import { FxService } from './payments/fx.service';
-import { AdminPaymentsController, PaymentActionsController, PaymentWebhooksController, SandboxPaymentController } from './payments/payments.controllers';
+import { AdminPaymentsController, PaymentActionsController, PaymentWebhooksController, SandboxPaymentController, SellerPayoutsController } from './payments/payments.controllers';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 class PoolShutdown implements OnApplicationShutdown {
@@ -117,11 +122,16 @@ export class AppModule {
         PaymentWebhooksController,
         SandboxPaymentController,
         AdminPaymentsController,
+        SellerPayoutsController,
         SellerShipmentController,
         CountryPartnersController,
         BuyerDeliveryController,
         PartnerPortalController,
         AdminLogisticsController,
+        DisputesController,
+        TariffsController,
+        AdminTariffsController,
+        SellerDocumentsController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -163,6 +173,9 @@ export class AppModule {
         PaymentsService,
         PartnersService,
         ShipmentsService,
+        DisputesService,
+        TariffsService,
+        SellerDocumentsService,
         LedgerService,
         FxService,
       ],

@@ -2,7 +2,7 @@ import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { PERMISSIONS, ROLE_DEFINITIONS, ROLES } from '@iie/shared';
 import { createDatabase, Database } from './db';
 import { categories, countries, currencies, dutyEstimates, exchangeRates, feeRules, hsCodes, laneShippingRates, lanes, permissions, rolePermissions, roles } from './schema';
-import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_DUTY_ESTIMATES, SEED_EXCHANGE_RATES, SEED_FEE_RULE, SEED_HS_CODES, SEED_LANES, SEED_SHIPPING_RATES } from './seed-data';
+import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_ORIGIN_COUNTRIES, SEED_DUTY_ESTIMATES, SEED_EXCHANGE_RATES, SEED_FEE_RULE, SEED_HS_CODES, SEED_LANES, SEED_SHIPPING_RATES } from './seed-data';
 
 /** Makes the roles/permissions tables match the catalogue in @iie/shared. */
 export async function syncRbac(db: Database): Promise<void> {
@@ -39,6 +39,7 @@ export async function syncRbac(db: Database): Promise<void> {
 export async function seedReferenceData(db: Database): Promise<void> {
   await db.insert(currencies).values(SEED_CURRENCIES).onConflictDoNothing();
   await db.insert(countries).values(SEED_COUNTRIES).onConflictDoNothing();
+  await db.insert(countries).values(SEED_ORIGIN_COUNTRIES).onConflictDoNothing();
   const rows = await db
     .select({ id: countries.id, iso: countries.isoAlpha2 })
     .from(countries)

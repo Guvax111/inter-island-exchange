@@ -9,6 +9,17 @@ export const SEED_CURRENCIES = [
   { code: 'BBD', name: 'Barbados Dollar', symbol: 'Bds$', minorUnit: 2 },
   { code: 'JMD', name: 'Jamaican Dollar', symbol: 'J$', minorUnit: 2 },
   { code: 'GYD', name: 'Guyanese Dollar', symbol: 'G$', minorUnit: 2 },
+  // Currencies of the origin-only countries below (not used for pricing).
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', minorUnit: 2 },
+  { code: 'GBP', name: 'Pound Sterling', symbol: '£', minorUnit: 2 },
+  { code: 'EUR', name: 'Euro', symbol: '€', minorUnit: 2 },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: 'CN¥', minorUnit: 2 },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹', minorUnit: 2 },
+  { code: 'BRL', name: 'Brazilian Real', symbol: 'R$', minorUnit: 2 },
+  { code: 'MXN', name: 'Mexican Peso', symbol: 'MX$', minorUnit: 2 },
+  { code: 'COP', name: 'Colombian Peso', symbol: 'COL$', minorUnit: 2 },
+  { code: 'DOP', name: 'Dominican Peso', symbol: 'RD$', minorUnit: 2 },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', minorUnit: 0 },
 ];
 
 /**
@@ -27,6 +38,28 @@ export const SEED_COUNTRIES = [
   { isoAlpha2: 'AG', isoAlpha3: 'ATG', name: 'Antigua and Barbuda', iieCode: 'ATG', slug: 'antigua', currencyCode: 'XCD', marketplaceEnabled: false },
   { isoAlpha2: 'KN', isoAlpha3: 'KNA', name: 'St. Kitts and Nevis', iieCode: 'KNA', slug: 'stkitts', currencyCode: 'XCD', marketplaceEnabled: false },
 ];
+
+/**
+ * Countries outside CARICOM, recorded only as a product's country of origin: goods from them pay the general (CET)
+ * duty rather than the CARICOM rate. They have no marketplace, lanes or sign-up; the public country list hides them.
+ */
+export const SEED_ORIGIN_COUNTRIES = [
+  { isoAlpha2: 'US', isoAlpha3: 'USA', name: 'United States', currencyCode: 'USD' },
+  { isoAlpha2: 'CA', isoAlpha3: 'CAN', name: 'Canada', currencyCode: 'CAD' },
+  { isoAlpha2: 'GB', isoAlpha3: 'GBR', name: 'United Kingdom', currencyCode: 'GBP' },
+  { isoAlpha2: 'CN', isoAlpha3: 'CHN', name: 'China', currencyCode: 'CNY' },
+  { isoAlpha2: 'IN', isoAlpha3: 'IND', name: 'India', currencyCode: 'INR' },
+  { isoAlpha2: 'BR', isoAlpha3: 'BRA', name: 'Brazil', currencyCode: 'BRL' },
+  { isoAlpha2: 'MX', isoAlpha3: 'MEX', name: 'Mexico', currencyCode: 'MXN' },
+  { isoAlpha2: 'CO', isoAlpha3: 'COL', name: 'Colombia', currencyCode: 'COP' },
+  { isoAlpha2: 'DO', isoAlpha3: 'DOM', name: 'Dominican Republic', currencyCode: 'DOP' },
+  { isoAlpha2: 'DE', isoAlpha3: 'DEU', name: 'Germany', currencyCode: 'EUR' },
+  { isoAlpha2: 'FR', isoAlpha3: 'FRA', name: 'France', currencyCode: 'EUR' },
+  { isoAlpha2: 'ES', isoAlpha3: 'ESP', name: 'Spain', currencyCode: 'EUR' },
+  { isoAlpha2: 'IT', isoAlpha3: 'ITA', name: 'Italy', currencyCode: 'EUR' },
+  { isoAlpha2: 'NL', isoAlpha3: 'NLD', name: 'Netherlands', currencyCode: 'EUR' },
+  { isoAlpha2: 'JP', isoAlpha3: 'JPN', name: 'Japan', currencyCode: 'JPY' },
+].map((c) => ({ ...c, iieCode: c.isoAlpha3, slug: `origin-${c.isoAlpha2.toLowerCase()}`, regionalBloc: 'EXTRA_REGIONAL', marketplaceEnabled: false }));
 
 /** Pilot lane: St. Lucia -> St. Vincent and the Grenadines. */
 export const SEED_LANES = [{ origin: 'LC', destination: 'VC', enabled: true }];

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { sellerProfiles } from '../src/db/schema';
 import {
   Client,
+  createActiveBuyer,
   createActiveSeller,
   createPublishedProduct,
   createSuperAdmin,
@@ -15,6 +16,7 @@ import {
   TestContext,
   testImage,
   uniqueEmail,
+  uploadSellerDocument,
 } from './helpers';
 
 let ctx: TestContext;
@@ -43,6 +45,30 @@ describe('seller review', () => {
     expect((await s.client.post('/me/products', {})).status).toBe(400);
     const early = await s.client.post('/me/products', { title: 'x' });
     expect(early.status).toBe(400);
+
+    // Proof of business registration or a national ID is required, and must be accepted by IIE.
+    expect((await admin.post(`/admin/sellers/${s.sellerId}/review`, { decision: 'APPROVE' })).body.error.code).toBe('DOCUMENT_REQUIRED');
+    expect((await uploadSellerDocument(s.client, 'NATIONAL_ID', Buffer.from('not a document'), 'id.txt')).body.error.code).toBe('UNSUPPORTED_DOCUMENT');
+    // A phone photo of an ID: accepted as an image, re-encoded (metadata such as location removed).
+    const photo = await uploadSellerDocument(s.client, 'NATIONAL_ID', await testImage('png', 1200, 800), 'id-card.png');
+    expect(photo.status).toBe(201);
+    expect(photo.body).toMatchObject({ type: 'NATIONAL_ID', status: 'PENDING', contentType: 'image/jpeg' });
+    const pdf = await uploadSellerDocument(s.client);
+    expect(pdf.body).toMatchObject({ type: 'BUSINESS_REGISTRATION', contentType: 'application/pdf' });
+    // The file is private: the seller and in-scope reviewers only, always as a download.
+    const file = await s.client.get(`/seller-documents/${pdf.body.id}`);
+    expect(file.status).toBe(200);
+    expect(file.headers['content-disposition']).toMatch(/^attachment/);
+    expect(file.headers['content-security-policy']).toMatch(/sandbox/);
+    expect((await admin.get(`/seller-documents/${pdf.body.id}`)).status).toBe(200);
+    expect((await (await createActiveBuyer(ctx, 'LC')).client.get(`/seller-documents/${pdf.body.id}`)).status).toBe(404);
+    expect((await request(ctx.app.getHttpServer()).get(`/api/v1/seller-documents/${pdf.body.id}`)).status).toBe(401);
+    // The reviewer sees the documents with the application.
+    expect((await admin.get(`/admin/sellers/${s.sellerId}`)).body.documents).toHaveLength(2);
+    await admin.post(`/admin/seller-documents/${photo.body.id}/review`, { decision: 'REJECT', note: 'Photo is blurred' }).expect(204);
+    expect((await admin.post(`/admin/sellers/${s.sellerId}/review`, { decision: 'APPROVE' })).body.error.code).toBe('DOCUMENT_REQUIRED');
+    await admin.post(`/admin/seller-documents/${pdf.body.id}/review`, { decision: 'ACCEPT' }).expect(204);
+    expect((await s.client.get('/me/seller/documents')).body.items.map((d: { status: string }) => d.status).sort()).toEqual(['ACCEPTED', 'REJECTED']);
 
     await admin.post(`/admin/sellers/${s.sellerId}/review`, { decision: 'APPROVE' }).expect(204);
     const approved = (await s.client.get('/me/seller')).body;
