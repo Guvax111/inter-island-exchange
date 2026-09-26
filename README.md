@@ -2,13 +2,17 @@
 
 A secure digital marketplace and trade platform connecting buyers and sellers across CARICOM.
 
-**Status:** Phases 1–2 complete.
+**Status:** Phases 1–3 complete.
 - **Phase 1 (core foundation):** registration, email verification, login with optional two-step verification,
   roles and permissions, onboarding, the country engine, admin tools and an append-only audit log.
 - **Phase 2 (marketplace):** seller approval, storefronts, product listings with IIE review, photos, stock, search,
   cart, saved items and addresses.
+- **Phase 3 (orders):** checkout with the full cost breakdown, orders with IIE transaction IDs
+  (`IIE-SLU-SVG-000001`), the central transaction state machine, stock reservation, notifications.
 
-Phase 3 (checkout and the central transaction engine) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+Phase 4 (payments) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+
+**Contact:** Inter-Island Exchange, Inc. · Arnos Vale, St. Vincent and the Grenadines · info@interislandexchange.com · (347) 497-3977
 
 ## Repository layout
 
@@ -62,14 +66,15 @@ CI runs the same steps plus a migration drift check, a dependency audit and the 
 |---|---|
 | [`IIE_PLATFORM_AUDIT.md`](docs/IIE_PLATFORM_AUDIT.md) | Phase 0 audit and minimum scope for the St. Lucia → St. Vincent pilot |
 | [`IIE_PLATFORM_ARCHITECTURE.md`](docs/IIE_PLATFORM_ARCHITECTURE.md) | Production architecture and open decisions |
-| [`IIE_DEVELOPMENT_ROADMAP.md`](docs/IIE_DEVELOPMENT_ROADMAP.md) | Phase status, results of each phase, Phase 3 plan |
+| [`IIE_DEVELOPMENT_ROADMAP.md`](docs/IIE_DEVELOPMENT_ROADMAP.md) | Phase status, results of each phase, Phase 4 plan |
+| [`IIE_TRANSACTION_STATE_MACHINE.md`](docs/IIE_TRANSACTION_STATE_MACHINE.md) | Every transaction state, who may move it, and how amounts are frozen |
 | [`IIE_DATABASE_SCHEMA.md`](docs/IIE_DATABASE_SCHEMA.md) | Tables, rules and planned entities |
 | [`IIE_API_DOCUMENTATION.md`](docs/IIE_API_DOCUMENTATION.md) | API conventions and endpoints ([`openapi.json`](docs/openapi.json)) |
 | [`IIE_COUNTRY_ENGINE.md`](docs/IIE_COUNTRY_ENGINE.md) | How countries, currencies and trade lanes are configured |
 | [`IIE_SECURITY.md`](docs/IIE_SECURITY.md) | Security controls, secrets, Gmail limits, known gaps |
 | [`MOCK_FUNCTIONALITY_AUDIT.md`](docs/MOCK_FUNCTIONALITY_AUDIT.md) | Every control that is not yet functional, and how it is labelled |
 
-State machine, payment, logistics and compliance documents are written in the phases that build them.
+Payment, logistics and compliance documents are written in the phases that build them.
 
 ## Important
 

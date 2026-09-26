@@ -2316,6 +2316,480 @@
           "buyer"
         ]
       }
+    },
+    "/api/v1/me/checkout/quote": {
+      "post": {
+        "operationId": "BuyerOrdersController_quote",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutQuoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/checkout": {
+      "post": {
+        "operationId": "BuyerOrdersController_place",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/orders": {
+      "get": {
+        "operationId": "BuyerOrdersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{iieId}": {
+      "get": {
+        "operationId": "BuyerOrdersController_get",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/orders/{iieId}/cancel": {
+      "post": {
+        "operationId": "BuyerOrdersController_cancel",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelOrderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/sales": {
+      "get": {
+        "operationId": "SellerOrdersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
+        ]
+      }
+    },
+    "/api/v1/me/sales/{iieId}": {
+      "get": {
+        "operationId": "SellerOrdersController_get",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "seller"
+        ]
+      }
+    },
+    "/api/v1/me/notifications": {
+      "get": {
+        "operationId": "NotificationsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/me/notifications/read": {
+      "post": {
+        "operationId": "NotificationsController_read",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/admin/transactions": {
+      "get": {
+        "operationId": "AdminTransactionsController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CREATED",
+                "AWAITING_PAYMENT",
+                "PAYMENT_PROCESSING",
+                "PAYMENT_CONFIRMED",
+                "AWAITING_SELLER_CONFIRMATION",
+                "SELLER_CONFIRMED",
+                "PREPARING_SHIPMENT",
+                "PICKUP_SCHEDULED",
+                "PICKED_UP",
+                "EXPORT_PROCESSING",
+                "IN_TRANSIT",
+                "ARRIVED_DESTINATION",
+                "CUSTOMS_PROCESSING",
+                "CUSTOMS_CLEARED",
+                "OUT_FOR_DELIVERY",
+                "DELIVERED",
+                "DELIVERY_CONFIRMED",
+                "DISPUTE_WINDOW",
+                "PAYOUT_APPROVED",
+                "PAYOUT_PROCESSING",
+                "COMPLETED",
+                "CANCELLED",
+                "PAYMENT_FAILED",
+                "CUSTOMS_HOLD",
+                "COMPLIANCE_HOLD",
+                "DISPUTED",
+                "REFUNDED",
+                "PARTIALLY_REFUNDED"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/transactions/{iieId}": {
+      "get": {
+        "operationId": "AdminTransactionsController_get",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/shipping-rates": {
+      "get": {
+        "operationId": "AdminTransactionsController_rates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminTransactionsController_addRate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShippingRateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/shipping-rates/{id}": {
+      "patch": {
+        "operationId": "AdminTransactionsController_updateRate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShippingRateUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/fee-rule": {
+      "get": {
+        "operationId": "AdminTransactionsController_fee",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "AdminTransactionsController_updateFee",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeeRuleUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/duty-estimates": {
+      "get": {
+        "operationId": "AdminTransactionsController_duties",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminTransactionsController_addDuty",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DutyEstimateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/duty-estimates/{id}": {
+      "patch": {
+        "operationId": "AdminTransactionsController_updateDuty",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DutyEstimateUpdateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
     }
   },
   "info": {
@@ -3206,6 +3680,15 @@
           "storePolicies": {
             "type": "string",
             "maxLength": 4000
+          },
+          "feePayer": {
+            "type": "string",
+            "enum": [
+              "BUYER",
+              "SELLER",
+              null
+            ],
+            "nullable": true
           }
         }
       },
@@ -3297,6 +3780,211 @@
           "city",
           "countryCode"
         ]
+      },
+      "CheckoutQuoteDto": {
+        "type": "object",
+        "properties": {
+          "sellerSlug": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "addressId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "sellerSlug",
+          "addressId"
+        ]
+      },
+      "PlaceOrderDto": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "quoteId"
+        ]
+      },
+      "CancelOrderDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "MarkReadDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "default": [],
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        }
+      },
+      "ShippingRateDto": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "destination": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "serviceName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "maxWeightGrams": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "price": {
+            "type": "string",
+            "pattern": "^\\d{1,9}(\\.\\d{1,2})?$"
+          },
+          "isPlaceholder": {
+            "default": false,
+            "type": "boolean"
+          },
+          "active": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "origin",
+          "destination",
+          "serviceName",
+          "maxWeightGrams",
+          "price"
+        ]
+      },
+      "ShippingRateUpdateDto": {
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "maxWeightGrams": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "price": {
+            "type": "string",
+            "pattern": "^\\d{1,9}(\\.\\d{1,2})?$"
+          },
+          "isPlaceholder": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FeeRuleUpdateDto": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "defaultPayer": {
+            "type": "string",
+            "enum": [
+              "BUYER",
+              "SELLER"
+            ]
+          }
+        }
+      },
+      "DutyEstimateDto": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "hsPrefix": {
+            "default": "",
+            "type": "string",
+            "pattern": "^\\d{0,10}$"
+          },
+          "caricomOriginDutyPercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "otherOriginDutyPercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "vatPercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "notes": {
+            "default": "",
+            "type": "string",
+            "maxLength": 500
+          },
+          "isPlaceholder": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "destination",
+          "caricomOriginDutyPercent",
+          "otherOriginDutyPercent",
+          "vatPercent"
+        ]
+      },
+      "DutyEstimateUpdateDto": {
+        "type": "object",
+        "properties": {
+          "caricomOriginDutyPercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "otherOriginDutyPercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "vatPercent": {
+            "type": "string",
+            "pattern": "^\\d{1,3}(\\.\\d{1,2})?$"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "isPlaceholder": {
+            "type": "boolean"
+          }
+        }
       }
     }
   }

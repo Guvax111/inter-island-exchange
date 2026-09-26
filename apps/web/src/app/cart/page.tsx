@@ -112,10 +112,15 @@ function CartView() {
             <p>
               Product subtotal: <span className="font-semibold">{group.subtotal.formatted}</span>
             </p>
-            {/* Checkout arrives in Phase 3; the button is honest about it. */}
-            <Button disabled title="Checkout opens in the next release">
-              Checkout — coming soon
-            </Button>
+            {group.readyForCheckout && group.seller.slug ? (
+              <Button asChild>
+                <Link href={`/checkout?seller=${group.seller.slug}`}>Check out with {group.seller.name}</Link>
+              </Button>
+            ) : (
+              <Button disabled title="Fix the items marked above first">
+                Check out
+              </Button>
+            )}
           </div>
         </div>
       ))}

@@ -1,6 +1,6 @@
 # IIE Database Schema
 
-**Engine:** PostgreSQL 16 · **Status:** Phase 1 and 2 tables implemented · **Source of truth:** `apps/api/src/db/schema.ts`
+**Engine:** PostgreSQL 16 · **Status:** Phase 1–3 tables implemented · **Source of truth:** `apps/api/src/db/schema.ts`
 (Drizzle) and the SQL migrations in `apps/api/drizzle/`.
 
 ## Rules
@@ -10,7 +10,7 @@
 - Status columns are `varchar` with `CHECK` constraints (easier to evolve than Postgres enums).
 - All timestamps are `timestamptz`.
 - Money (from Phase 2): `bigint` minor units plus a `char(3)` currency code. No floating point.
-- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`. From Phase 3: `transaction_events`, `payment_events`, `ledger_entries`.
+- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`. `transactions.iie_id` cannot be changed. From Phase 3: `transaction_events`, `payment_events`, `ledger_entries`.
 - Secrets are never stored raw: session tokens and one-time tokens are SHA-256 hashes; TOTP secrets are AES-256-GCM encrypted; passwords are argon2id.
 - Schema changes: edit `schema.ts`, run `pnpm --filter @iie/api db:generate`, review the SQL, commit both. CI fails if they drift (`drizzle-kit check`).
 
@@ -70,6 +70,24 @@
 | `carts`, `cart_items` | One cart per buyer; quantities only (prices always read live) | `carts.user_id` UQ; UQ(`cart_id`, `variant_id`), quantity 1–99 |
 | `saved_products`, `saved_sellers` | Buyer favourites | composite PKs |
 
+## Phase 3 tables (checkout and transactions)
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `seller_storefronts.fee_payer` (new column) | Seller's choice of who pays the IIE fee | BUYER, SELLER or null (platform default) |
+| `lane_shipping_rates` | Shipping price bands per trade lane | `lane_id` FK, `max_weight_grams`, `price_minor`, `currency_code`, `is_placeholder`, `active` |
+| `fee_rules` | IIE platform fee | `lane_id` (null = global) UQ NULLS NOT DISTINCT, `percent_bps` 0–10000, `default_payer` |
+| `duty_estimates` | Duty/VAT estimates | UQ(`destination_country_id`, `hs_prefix`), `caricom_origin_duty_bps`, `other_origin_duty_bps`, `vat_bps`, `notes`, `is_placeholder` |
+| `quotes` | Frozen checkout for one seller | `buyer_user_id`, `seller_profile_id`, `address_id`, `snapshot` JSONB (all lines and amounts), `total_minor`, `expires_at`, `used_at` |
+| `orders` | One per placed quote | `quote_id` UQ, `delivery_address` JSONB snapshot |
+| `order_items` | Price and product snapshot | `sku`, `title`, `variant_name`, `hs_code`, `country_of_origin`, `unit_weight_grams`, `unit_price_minor`, `quantity`, `line_total_minor` |
+| `transactions` | **The central record** (see `IIE_TRANSACTION_STATE_MACHINE.md`) | `iie_id` UQ (immutable), `order_id` UQ, buyer, seller, origin, destination, `status`, `version`, `held_from_status`, six sub-statuses, currencies + `fx_rate`/`fx_source`/`fx_recorded_at`, all amounts in minor units, `fee_payer`, `duties_collected`, `payment_due_at` |
+| `transaction_events` | **Append-only** event log | `from_status`, `to_status`, `actor_type`, `actor_user_id`, `reason`, `metadata` |
+| `inventory_reservations` | Stock held for unpaid orders | `transaction_id`, `variant_id`, `quantity`, `expires_at`, `released_at`, `consumed_at` |
+| `notifications` | In-app notifications | `user_id`, `type`, `title`, `body`, `link`, `transaction_id`, `read_at` |
+
+Sequence `transaction_number_seq` numbers IIE IDs.
+
 **Public visibility** is one rule, used by search, product pages, images and the cart
 (`apps/api/src/catalog/visibility.ts`): product `ACTIVE` or `OUT_OF_STOCK`, seller `ACTIVE`, seller's account
 `ACTIVE`, storefront present, seller's country marketplace open.
@@ -88,8 +106,7 @@ users 1─N audit_logs (as actor)
 ## Planned tables (later phases)
 
 Designed in [`IIE_PLATFORM_ARCHITECTURE.md` §7](./IIE_PLATFORM_ARCHITECTURE.md#7-data-model-core-entities):
-restricted_product_rules (Phase 6); checkout_groups, quotes, orders, order_items, transactions, transaction_events,
-inventory reservations, notifications (Phase 3);
+restricted_product_rules (Phase 6);
 payment_intents, payment_events, refunds, payouts, payout_accounts, ledger_entries, exchange_rates, provider_webhooks (Phase 4);
 logistics_partners, shipments, shipment_events, customs_documents (Phase 5);
 compliance_checks, kyc_verifications, disputes, dispute_evidence (Phase 6); messages, reviews (Phase 7).

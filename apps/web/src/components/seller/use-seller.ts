@@ -26,6 +26,7 @@ export interface MySeller {
     shippingOrigin: string;
     returnPolicy: string;
     storePolicies: string;
+    feePayer: 'BUYER' | 'SELLER' | null;
   } | null;
   productCounts: Record<string, number>;
 }

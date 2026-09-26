@@ -13,12 +13,12 @@ export default function StoreProfilePage() {
   const qc = useQueryClient();
   const { data } = useMySeller();
   const store = data?.storefront;
-  const [form, setForm] = useState({ displayName: '', slug: '', description: '', shippingOrigin: '', returnPolicy: '', storePolicies: '' });
+  const [form, setForm] = useState({ displayName: '', slug: '', description: '', shippingOrigin: '', returnPolicy: '', storePolicies: '', feePayer: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
-    if (store) setForm({ displayName: store.displayName, slug: store.slug, description: store.description, shippingOrigin: store.shippingOrigin, returnPolicy: store.returnPolicy, storePolicies: store.storePolicies });
+    if (store) setForm({ displayName: store.displayName, slug: store.slug, description: store.description, shippingOrigin: store.shippingOrigin, returnPolicy: store.returnPolicy, storePolicies: store.storePolicies, feePayer: store.feePayer ?? '' });
   }, [store]);
 
   if (!data) return <p className="text-muted-foreground">Loading…</p>;
@@ -32,7 +32,7 @@ export default function StoreProfilePage() {
     e.preventDefault();
     setError(null);
     try {
-      await api('/me/storefront', { method: 'PATCH', body: form });
+      await api('/me/storefront', { method: 'PATCH', body: { ...form, feePayer: form.feePayer || null } });
       await qc.invalidateQueries({ queryKey: ['my-seller'] });
       setSaved(true);
     } catch (err) {
@@ -84,6 +84,20 @@ export default function StoreProfilePage() {
       {area('description', 'About your store', 'Tell buyers who you are and what you sell.')}
       {area('returnPolicy', 'Return policy', 'For example: unopened items can be returned within 14 days of delivery.')}
       {area('storePolicies', 'Other store policies', 'Optional: packaging, bulk orders, business hours.')}
+      <div className="space-y-1.5 sm:col-span-2">
+        <Label htmlFor="feePayer">Who pays the IIE platform fee (5% of product cost)?</Label>
+        <select
+          id="feePayer"
+          value={form.feePayer}
+          onChange={(e) => { setSaved(false); setForm({ ...form, feePayer: e.target.value }); }}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 md:w-96"
+        >
+          <option value="">IIE default (the buyer pays it at checkout)</option>
+          <option value="BUYER">The buyer pays it at checkout</option>
+          <option value="SELLER">I pay it: deduct it from my payout</option>
+        </select>
+        <p className="text-xs text-muted-foreground">Absorbing the fee makes your prices look lower at checkout.</p>
+      </div>
       <Button type="submit" className="sm:w-fit">
         Save store profile
       </Button>

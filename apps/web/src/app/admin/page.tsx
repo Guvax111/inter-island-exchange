@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useMe } from '@/lib/session';
 
 const ORDER: [string, string][] = [
+  ['transaction.read.any', '/admin/transactions'],
   ['seller.review', '/admin/sellers'],
   ['product.review', '/admin/products'],
   ['user.read.any', '/admin/users'],

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import type { Me } from '@/lib/session';
-import type { Cart, Money, SellerCard } from '@/lib/types';
+import type { Cart, Money, OrderSummary, SellerCard } from '@/lib/types';
 
 interface SavedProduct {
   id: string;
@@ -44,6 +44,7 @@ function BuyerDashboard({ me }: { me: Me }) {
   const cart = useQuery({ queryKey: ['cart'], queryFn: () => api<Cart>('/me/cart') });
   const products = useQuery({ queryKey: ['saved-products'], queryFn: () => api<{ items: SavedProduct[] }>('/me/saved/products') });
   const sellers = useQuery({ queryKey: ['saved-sellers'], queryFn: () => api<{ items: (SellerCard & { available: boolean })[] }>('/me/saved/sellers') });
+  const orders = useQuery({ queryKey: ['orders'], queryFn: () => api<{ items: OrderSummary[] }>('/me/orders') });
   const addresses = useQuery({ queryKey: ['addresses'], queryFn: () => api<{ items: Address[] }>('/me/addresses') });
 
   return (
@@ -65,7 +66,12 @@ function BuyerDashboard({ me }: { me: Me }) {
           <CardHeader>
             <CardTitle className="text-lg">Orders</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">Orders, payments, tracking and disputes appear here once checkout opens.</CardContent>
+          <CardContent className="space-y-2 text-sm">
+            <p>{orders.data?.items.length ?? 0} orders{orders.data?.items.some((o) => o.status === 'AWAITING_PAYMENT') ? ' · one or more waiting for payment' : ''}</p>
+            <Button asChild size="sm">
+              <Link href="/orders">View my orders</Link>
+            </Button>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader>

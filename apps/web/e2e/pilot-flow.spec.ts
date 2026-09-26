@@ -5,7 +5,8 @@ import { ADMIN, EMAIL_DIR } from '../playwright.config';
 
 /**
  * The St. Lucia -> St. Vincent pilot, as far as Phase 2 goes:
- * seller signs up and is approved, lists diapers, IIE approves them, a buyer in St. Vincent finds them and fills a cart.
+ * seller signs up and is approved, lists diapers, IIE approves them, a buyer in St. Vincent finds them, checks out and
+ * places the order (IIE-SLU-SVG-…); the seller and IIE see it. Payment arrives in Phase 4.
  */
 const run = Date.now().toString(36);
 const seller = { email: `seller-${run}@e2e.example`, password: 'castries-seller-password' };
@@ -48,7 +49,7 @@ async function signUp(page: Page, type: 'SELLER' | 'BUYER', user: { email: strin
   await expect(page.getByText('Email confirmed')).toBeVisible();
 }
 
-test('pilot: St. Lucia seller lists diapers, St. Vincent buyer adds them to the cart', async ({ browser }) => {
+test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', async ({ browser }) => {
   // ---- Seller applies
   const sellerPage = await (await browser.newContext()).newPage();
   await signUp(sellerPage, 'SELLER', seller, 'LC', 'Celia');
@@ -127,6 +128,32 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer adds them to the 
   await buyerPage.getByRole('link', { name: 'View cart' }).click();
   await expect(buyerPage.getByText('Product subtotal:')).toBeVisible();
   await expect(buyerPage.getByText('EC$90.00').first()).toBeVisible();
-  await expect(buyerPage.getByRole('button', { name: 'Checkout — coming soon' })).toBeDisabled();
   await shot(buyerPage, 'p2-05-cart-mobile');
+
+  // ---- Checkout: PRODUCT COST + SHIPPING + FEE = TOTAL, estimated duties shown separately
+  await buyerPage.getByRole('link', { name: /Check out with/ }).click();
+  await expect(buyerPage.getByText('Order summary')).toBeVisible();
+  await expect(buyerPage.getByText('EC$90.00').first()).toBeVisible(); // 2 x 45.00
+  await expect(buyerPage.getByText('EC$55.00')).toBeVisible(); // 3.6 kg placeholder band
+  await expect(buyerPage.getByText('IIE platform fee (5%)')).toBeVisible();
+  await expect(buyerPage.getByText('EC$4.50')).toBeVisible();
+  await expect(buyerPage.getByText('EC$23.20')).toBeVisible(); // estimated VAT on arrival
+  await shot(buyerPage, 'p3-01-checkout-mobile');
+  await buyerPage.getByRole('button', { name: 'Place order · EC$149.50' }).click();
+  await buyerPage.waitForURL(/\/orders\/IIE-SLU-SVG-\d{6}$/);
+  const iieId = buyerPage.url().split('/').pop()!;
+  await expect(buyerPage.getByRole('heading', { name: iieId })).toBeVisible();
+  await expect(buyerPage.getByText(/Waiting for payment · items reserved/)).toBeVisible();
+  await expect(buyerPage.getByRole('button', { name: 'Pay now — coming soon' })).toBeDisabled();
+  await shot(buyerPage, 'p3-02-order-mobile');
+
+  // ---- Seller sees the new order; IIE sees the transaction and its event log
+  await sellerPage.goto('/dashboard/seller/orders');
+  await expect(sellerPage.getByText(iieId)).toBeVisible();
+  await sellerPage.getByText(iieId).click();
+  await expect(sellerPage.getByText('Waiting for the buyer to pay. Do not prepare or ship yet.')).toBeVisible();
+  await adminPage.goto('/admin/transactions');
+  await adminPage.getByRole('button', { name: iieId }).click();
+  await expect(adminPage.getByText(/CREATED → AWAITING_PAYMENT by SYSTEM/)).toBeVisible();
+  await shot(adminPage, 'p3-03-admin-transaction');
 });

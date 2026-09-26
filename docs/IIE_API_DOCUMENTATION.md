@@ -1,6 +1,6 @@
 # IIE API Documentation
 
-**Version:** v1 (base path `/api/v1`) · **Status:** Phases 1–2
+**Version:** v1 (base path `/api/v1`) · **Status:** Phases 1–3
 
 The machine-readable specification is [`openapi.json`](./openapi.json), generated from the code with
 `pnpm --filter @iie/api build && pnpm --filter @iie/api openapi`. In non-production environments the
@@ -141,6 +141,24 @@ Permission column: `public` = no session; otherwise the permission required (see
 | POST | `/admin/products/{id}/suspend` · `/reinstate` | `product.review` | `{ reason }` |
 | GET/POST | `/admin/categories` | `category.manage` | `{ name, slug, parentSlug?, sortOrder? }` |
 | PATCH | `/admin/categories/{slug}` | `category.manage` | `{ name?, sortOrder?, active? }` |
+
+## Endpoints (Phase 3 — checkout and transactions)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/me/checkout/quote` | `order.create` + active account | `{ sellerSlug, addressId }` → frozen quote valid 15 min: lines, `productCost`, `shipping` (+ `isPlaceholder`), `platformFee` (`percent`, `payer`, `chargedToBuyer`), `otherFees`, `dutiesEstimate` (`duty`, `vat`, `paidWhen: ON_ARRIVAL`), `total`, `estimatedLandedTotal`. Errors: `NOTHING_TO_CHECKOUT`, `CART_HAS_ISSUES`, `SELLER_UNAVAILABLE`, `NOT_SHIPPABLE_TO_YOU`, `NO_SHIPPING_RATE`, `LIMIT_EXCEEDED`, `DESTINATION_CLOSED`, `OWN_PRODUCT` |
+| POST | `/me/checkout` | `order.create` + active account | `{ quoteId }` → `201 { iieId }`. Reserves stock for 30 minutes. Errors: `QUOTE_USED`, `QUOTE_EXPIRED`, `STOCK_CHANGED` (409) |
+| GET | `/me/orders` · `/me/orders/{iieId}` | `order.read.own` | Buyer's orders; detail has items, amounts, delivery address, sub-statuses, `timeline`, `paymentDueAt`, `canCancel` |
+| POST | `/me/orders/{iieId}/cancel` | `order.create` | `{ reason? }` while `AWAITING_PAYMENT` |
+| GET | `/me/sales` · `/me/sales/{iieId}` | `order.fulfil.own` | Seller's orders; buyer first name and delivery town only; includes `sellerPayout` |
+| GET | `/me/notifications` | signed in | `{ items, unread }` |
+| POST | `/me/notifications/read` | signed in | `{ ids? }` (all when empty) |
+| GET | `/admin/transactions` · `/admin/transactions/{iieId}` | `transaction.read.any` (country-scoped: origin or destination) | Filters `status`, `q` (IIE ID); detail includes the event log with actors |
+| GET/POST/PATCH | `/admin/shipping-rates[/{id}]` | `config.manage` | `{ origin, destination, serviceName, maxWeightGrams, price, isPlaceholder, active }` |
+| GET/PUT | `/admin/fee-rule` | `config.manage` | `{ percent, defaultPayer }` |
+| GET/POST/PATCH | `/admin/duty-estimates[/{id}]` | `config.manage` | `{ destination, hsPrefix, caricomOriginDutyPercent, otherOriginDutyPercent, vatPercent, notes, isPlaceholder }` |
+
+Sellers set who pays the fee with `PATCH /me/storefront { feePayer: "BUYER" | "SELLER" | null }` (null = IIE default).
 
 ### Health
 

@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Menu, ShoppingCart, X } from 'lucide-react';
+import { Bell, Menu, ShoppingCart, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { PRIMARY_NAV } from '@/lib/navigation';
 import { useMe, useRefreshMe } from '@/lib/session';
+import type { NotificationList } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 export function SiteHeader() {
@@ -18,7 +20,13 @@ export function SiteHeader() {
   const refresh = useRefreshMe();
   useEffect(() => setOpen(false), [pathname]);
 
-  const ADMIN_PERMISSIONS = ['user.read.any', 'country.manage', 'seller.review', 'product.review'];
+  const { data: bell } = useQuery({
+    queryKey: ['notifications'],
+    enabled: !!me,
+    refetchInterval: 60_000,
+    queryFn: () => api<NotificationList>('/me/notifications'),
+  });
+  const ADMIN_PERMISSIONS = ['user.read.any', 'country.manage', 'seller.review', 'product.review', 'transaction.read.any'];
   const isAdmin = ADMIN_PERMISSIONS.some((p) => me?.permissions.includes(p));
   const dashboard = me?.roles.includes('seller') ? '/dashboard/seller' : me?.roles.includes('buyer') ? '/dashboard/buyer' : null;
 
@@ -30,6 +38,19 @@ export function SiteHeader() {
 
   const account = me ? (
     <>
+      <Button asChild variant="ghost" size="sm">
+        <Link href="/notifications" aria-label={`Notifications${bell?.unread ? `, ${bell.unread} unread` : ''}`} className="relative">
+          <Bell className="h-4 w-4" aria-hidden />
+          {!!bell?.unread && (
+            <span className="absolute -right-0.5 -top-0.5 min-w-4 rounded-full bg-coral-500 px-1 text-center text-[10px] font-bold leading-4 text-white">{bell.unread > 9 ? '9+' : bell.unread}</span>
+          )}
+        </Link>
+      </Button>
+      {me.roles.includes('buyer') && (
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/orders">My orders</Link>
+        </Button>
+      )}
       {me.roles.includes('buyer') && (
         <Button asChild variant="ghost" size="sm">
           <Link href="/cart" aria-label="Cart">

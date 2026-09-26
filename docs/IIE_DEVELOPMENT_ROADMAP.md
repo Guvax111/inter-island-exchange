@@ -7,8 +7,8 @@
 | 0 | Audit, architecture | **Done** |
 | 1 | Core foundation: repo, auth, roles, profiles, country engine, database | **Done** (see Phase 1 result below) |
 | 2 | Marketplace: seller approval, storefronts, products, categories, search, cart | **Done** (see Phase 2 result below) |
-| 3 | Orders and transaction engine: checkout, orders, state machine, notifications | **Planned — awaiting approval** (below) |
-| 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | Not started |
+| 3 | Orders and transaction engine: checkout, orders, state machine, notifications | **Done** (see Phase 3 result below) |
+| 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | **Planned — awaiting approval** (below) |
 | 5 | Logistics: partners, shipments, tracking, delivery confirmation | Not started |
 | 6 | Compliance and disputes | Not started |
 | 7 | Administration and analytics | Not started |
@@ -198,7 +198,7 @@ Other notes:
 
 ---
 
-## Phase 3 plan — Orders and transaction engine
+## Phase 3 plan — Orders and transaction engine (approved 2026-09-26)
 
 ### What will be built
 
@@ -251,9 +251,84 @@ admin CRUD for shipping rates, fee rules and duty estimates.
 | Orders placed but never paid tie up stock | Reservation expiry job releases stock and cancels the order |
 | No payments yet, so no end-to-end sale until Phase 4 | Phase 3 ends at "awaiting payment"; Phase 4 connects the sandbox payment provider |
 
-### Decisions requested before Phase 3 (can be placeholders for testing)
+### Decisions (2026-09-26)
 
-- IIE platform fee for the pilot (e.g. a percentage of the product subtotal, and who pays it: buyer, seller or split).
-- SLU → SVG shipping rates by weight from the logistics partner (D5), or placeholder rates for testing.
-- Whether to show duty/tax estimates for SVG in the pilot, or only "may be payable on arrival".
-- How long a placed order holds stock while waiting for payment (suggested: 30 minutes).
+- Platform fee: **5%**, with the option for either the buyer or the seller to pay. Implemented as an IIE default
+  (buyer pays) that each seller can switch to "I pay it" in their store profile.
+- Shipping: **placeholder rates** for SLU → SVG until the logistics partner's rates arrive.
+- Duties: **show an estimated amount**.
+- Unpaid orders hold stock for **30 minutes**.
+
+---
+
+## Phase 3 result
+
+**Delivered:** everything in the Phase 3 plan, plus IIE branding (logo, favicon, brand colours) and the Contact
+page with IIE's official details. 94 API tests (20 new, including pricing unit tests and a concurrent-order test),
+6 shared tests and the end-to-end browser test pass. The browser test now continues past the cart: the St. Vincent
+buyer checks out (EC$90.00 + EC$55.00 shipping + EC$4.50 fee = **EC$149.50**, estimated VAT on arrival EC$23.20),
+places the order and receives `IIE-SLU-SVG-000001`; the seller sees the order and IIE sees the transaction with
+its event log.
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| "Payment window expiring" reminder | Not included | A 30-minute window is short; order-placed and order-cancelled messages cover it. Easy to add |
+| Duties shown in the total | Shown as a separate **estimate payable on arrival**; not added to what the buyer pays IIE | Collecting duties means IIE (or its broker) paying customs on the buyer's behalf and settling differences: a business and legal decision (see below) |
+| Separate checkout groups for multi-seller carts | Pilot rule: one seller per checkout | Matches the Phase 2 decision; groups can be added when multi-seller shipping is designed |
+
+**Pilot pricing rules (documented in `IIE_TRANSACTION_STATE_MACHINE.md`):** fee = 5% of product cost (not of
+shipping); shipping by total parcel weight; duty estimated per line on value + share of shipping at the CARICOM or
+non-CARICOM rate; VAT on value + shipping + duty.
+
+---
+
+## Phase 4 plan — Payments (sandbox first)
+
+### What will be built
+
+1. **Payment provider abstraction** (`PaymentProvider`: create intent, confirm, refund, payout, verify webhook)
+   with a **sandbox provider** that behaves like a real hosted payment page (success, decline and delayed outcomes)
+   so the whole flow can be tested without real money.
+2. **Pay now:** the order page opens the provider's hosted payment page; IIE never sees card numbers (PCI scope
+   stays at the lowest level). Webhooks are stored first, verified, de-duplicated and then processed.
+3. **Transaction flow:** `AWAITING_PAYMENT → PAYMENT_PROCESSING → PAYMENT_CONFIRMED → AWAITING_SELLER_CONFIRMATION`,
+   or `PAYMENT_FAILED` with retry. On payment, the stock reservation is consumed and a `SALE` movement written.
+   A payment that arrives after the order expired is refunded automatically.
+4. **Seller confirmation:** sellers confirm (or decline, which refunds) paid orders; buyer and seller notified by
+   email and in-app.
+5. **Ledger:** double-entry `ledger_entries` for buyer charge, IIE fee, seller payable and refunds, so every
+   transaction reconciles; admin view per transaction.
+6. **Refunds:** full refunds for declined or cancelled paid orders (partial refunds arrive with disputes in Phase 6).
+7. **Payout records:** payable amounts per seller accumulate; payouts themselves are released after delivery
+   (Phases 5–6) through the provider or recorded manually for the pilot.
+8. **FX provider abstraction** with stored, never-recomputed rates (the pilot lane stays XCD → XCD, so the rate is 1).
+9. **Docs:** `IIE_PAYMENT_ARCHITECTURE.md`.
+
+### Database changes
+
+`payment_intents`, `payment_events` (append-only), `provider_webhooks` (raw, unique per provider event),
+`refunds`, `payouts`, `ledger_entries` (append-only, double-entry), `exchange_rates` (append-only).
+
+### API changes
+
+`POST /me/orders/{iieId}/pay` (returns the hosted payment URL) · `POST /webhooks/payments/{provider}` (public,
+signature-verified) · `POST /me/sales/{iieId}/confirm` · `POST /me/sales/{iieId}/decline` ·
+`GET /admin/transactions/{iieId}/ledger` · `GET /admin/payouts`.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| No licensed payment partner chosen yet (D2) | Everything runs against the sandbox provider; a real adapter is a separate, contained piece of work |
+| Webhooks arrive twice, late or out of order | Store-then-process, unique provider event IDs, state machine refuses impossible moves |
+| Payment succeeds after the 30-minute window | Automatic refund, and the buyer is told why |
+| Regulatory: IIE must not hold funds | Funds sit with the licensed provider; IIE records instructions and ledger entries only |
+
+### Decisions requested before Phase 4
+
+- **Payment partner (D2):** which licensed provider(s) IIE will use for St. Lucia and St. Vincent (card and/or bank
+  transfer), or confirm building against the sandbox until one is contracted.
+- **Duties:** keep them as an estimate paid on arrival (current behaviour), or should IIE collect estimated duties at
+  checkout through its customs broker?
+- **Seller confirmation time:** how long a seller has to confirm a paid order before it is refunded automatically
+  (suggested: 48 hours).

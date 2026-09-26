@@ -120,3 +120,65 @@ export interface Cart {
 export function flattenCategories(nodes: CategoryNode[], depth = 0): { slug: string; label: string }[] {
   return nodes.flatMap((n) => [{ slug: n.slug, label: `${'— '.repeat(depth)}${n.name}` }, ...flattenCategories(n.children, depth + 1)]);
 }
+
+// ------------------------------------------------------------------ Phase 3
+
+export interface Quote {
+  quoteId: string;
+  expiresAt: string;
+  seller: { slug: string; name: string };
+  shipsFrom: string;
+  shipsTo: string;
+  address: { line1: string; line2: string | null; city: string; region: string | null; country: string };
+  lines: { sku: string; title: string; variantName: string; quantity: number; unitPrice: Money; lineTotal: Money }[];
+  weightKg: number;
+  productCost: Money;
+  shipping: Money & { serviceName: string; isPlaceholder: boolean };
+  platformFee: Money & { percent: number; payer: 'BUYER' | 'SELLER'; chargedToBuyer: Money };
+  otherFees: Money;
+  dutiesEstimate: Money & { duty: Money; vat: Money; incomplete: boolean; isPlaceholder: boolean; paidWhen: 'ON_ARRIVAL' };
+  total: Money;
+  estimatedLandedTotal: Money;
+}
+
+export interface OrderSummary {
+  iieId: string;
+  status: string;
+  statusLabel: string;
+  total: Money;
+  seller: { name: string; slug: string };
+  buyerFirstName: string;
+  route: string;
+  paymentDueAt: string | null;
+  createdAt: string;
+}
+
+export interface OrderDetail {
+  iieId: string;
+  status: string;
+  statusLabel: string;
+  subStatuses: Record<string, string>;
+  paymentDueAt: string | null;
+  canCancel: boolean;
+  seller: { name: string; slug: string };
+  buyer: { firstName: string; lastName?: string; email?: string };
+  deliveryAddress: Record<string, string | null>;
+  items: { sku: string; title: string; variantName: string; quantity: number; unitPrice: Money; lineTotal: Money; hsCode: string | null; countryOfOrigin: string }[];
+  amounts: {
+    productCost: Money;
+    shipping: Money;
+    platformFee: Money & { percent: number; payer: 'BUYER' | 'SELLER'; chargedToBuyer: Money };
+    otherFees: Money;
+    dutiesEstimate: Money & { collected: boolean };
+    total: Money;
+    sellerPayout?: Money;
+  };
+  currency: { transaction: string; fxRate: string; fxSource: string };
+  timeline: { status: string; label: string; at: string; reason: string | null; from?: string | null; actorType?: string; actorUserId?: string | null }[];
+  createdAt: string;
+}
+
+export interface NotificationList {
+  unread: number;
+  items: { id: string; title: string; body: string; link: string | null; readAt: string | null; createdAt: string }[];
+}

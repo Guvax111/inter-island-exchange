@@ -1,6 +1,6 @@
 # IIE Security
 
-**Status:** Phase 1–2 controls implemented and tested. A full review and penetration test are scheduled for Phase 8.
+**Status:** Phase 1–3 controls implemented and tested. A full review and penetration test are scheduled for Phase 8.
 
 ## Implemented in Phase 1
 
@@ -35,6 +35,17 @@
 | Stock integrity | Stock changes recorded in an append-only ledger (DB trigger) | `inventory_movements`; ledger test |
 | Search | Free text is reduced to letters and digits before building the query, so it cannot inject query syntax; parameterised SQL | `marketplace/search.provider.ts`; search test |
 | Cart | Server checks visibility, stock, trade lane and own-product rules on every add; cart holds quantities only, never prices | `cart.service.ts`; cart tests |
+
+## Added in Phase 3
+
+| Area | Control | Where / test |
+|---|---|---|
+| Financial integrity | Every amount in integer minor units, computed server-side from frozen quotes; the browser never sends prices | `pricing.ts`, `checkout.service.ts`; pricing unit tests |
+| Price freezing | Orders are created only from a 15-minute quote; later price changes do not touch placed orders | checkout test |
+| Stock races | Stock checked and reserved under row locks in one database transaction; the last unit cannot be sold twice | concurrent-order test |
+| State integrity | One transition function; allowed moves and actor types in a single table; version counter; append-only event log (trigger); immutable IIE ID (trigger) | `transaction-engine.ts`; engine tests |
+| Order privacy | Buyers see only their orders; sellers see only their sales and only the buyer's first name and delivery town; admin access is country-scoped to origin or destination | visibility test |
+| Configuration changes | Fee, shipping rates and duty estimates change only with `config.manage` (super administrators) and are audited with before/after values | settings test |
 
 ## Secrets
 
