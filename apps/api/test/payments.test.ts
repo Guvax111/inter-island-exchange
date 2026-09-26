@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import request from 'supertest';
-import { inventory, inventoryMovements, ledgerEntries, payouts, refunds, transactions } from '../src/db/schema';
+import { exchangeRates, inventory, inventoryMovements, ledgerEntries, paymentEvents, payouts, refunds, transactions } from '../src/db/schema';
 import { OrdersService } from '../src/transactions/orders.service';
 import { PaymentsService } from '../src/payments/payments.service';
 import { PAYMENT_PROVIDER, SandboxPaymentProvider } from '../src/payments/payment.provider';
@@ -235,6 +235,10 @@ describe('ledger integrity', () => {
     await expect(unbalanced).rejects.toThrow();
     const err = await ctx.db.execute(sql`update ${ledgerEntries} set amount_minor = 1`).then(() => 'ok', (e: Error) => String((e.cause as Error)?.message ?? e.message));
     expect(err).toMatch(/append-only/);
+    for (const table of [ledgerEntries, paymentEvents, exchangeRates]) {
+      const truncated = await ctx.db.execute(sql`truncate ${table}`).then(() => 'ok', (e: Error) => String((e.cause as Error)?.message ?? e.message));
+      expect(truncated).toMatch(/append-only: TRUNCATE/);
+    }
   });
 });
 

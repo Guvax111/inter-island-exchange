@@ -2,7 +2,7 @@
 
 A secure digital marketplace and trade platform connecting buyers and sellers across CARICOM.
 
-**Status:** Phases 1–3 complete.
+**Status:** Phases 1–4 complete (payments on a sandbox provider).
 - **Phase 1 (core foundation):** registration, email verification, login with optional two-step verification,
   roles and permissions, onboarding, the country engine, admin tools and an append-only audit log.
 - **Phase 2 (marketplace):** seller approval, storefronts, product listings with IIE review, photos, stock, search,
@@ -10,7 +10,11 @@ A secure digital marketplace and trade platform connecting buyers and sellers ac
 - **Phase 3 (orders):** checkout with the full cost breakdown, orders with IIE transaction IDs
   (`IIE-SLU-SVG-000001`), the central transaction state machine, stock reservation, notifications.
 
-Phase 4 (payments) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+- **Phase 4 (payments):** pay on the provider's hosted page (sandbox until a licensed provider is contracted),
+  signed webhooks, double-entry ledger, seller confirmation within 48 hours with automatic refund, payouts on hold.
+
+Staging is hosted in St. Vincent and the Grenadines: see [`docs/IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md).
+Phase 5 (logistics) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
 
 **Contact:** Inter-Island Exchange, Inc. · Arnos Vale, St. Vincent and the Grenadines · info@interislandexchange.com · (347) 497-3977
 
@@ -20,7 +24,8 @@ Phase 4 (payments) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
 apps/api         NestJS API (/api/v1), database schema and migrations (Drizzle), outbox worker, CLIs
 apps/web         Next.js website: public pages, sign-up/login, onboarding, account, admin
 packages/shared  Validation schemas, roles and permissions, statuses and money helpers used by both apps
-docs/            Audit, architecture, schema, API, country engine, security, roadmap
+deploy/staging   Docker Compose stack for the St. Vincent staging server (Caddy HTTPS, backups)
+docs/            Audit, architecture, schema, API, payments, deployment, country engine, security, roadmap
 ```
 
 ## Run it locally
@@ -45,6 +50,9 @@ pnpm dev:api                           # http://localhost:4000/api/v1 (docs at /
 pnpm dev:web                           # http://localhost:3000
 ```
 
+Payments use the sandbox provider: "Pay" opens a test page marked **SANDBOX PAYMENT PAGE · NO REAL MONEY** where you
+choose the bank's answer. Set `SANDBOX_PAYMENT_SECRET` outside local/test.
+
 With `EMAIL_PROVIDER=sandbox`, verification and reset emails are printed in the API log; open the link
 from there. To send real email through Gmail, see `.env.example` and [`docs/IIE_SECURITY.md`](docs/IIE_SECURITY.md).
 
@@ -55,6 +63,7 @@ pnpm typecheck
 pnpm test        # needs Postgres; resets the database named in TEST_DATABASE_URL (must end in _test)
 pnpm build
 pnpm e2e         # browser test of the pilot flow; needs Postgres database iie_e2e and a prior build
+                 # E2E_BASE_URL=https://… E2E_EMAIL_DIR=… runs it against an already-running site instead
 ```
 
 CI runs the same steps plus a migration drift check, a dependency audit and the end-to-end test
@@ -70,11 +79,13 @@ CI runs the same steps plus a migration drift check, a dependency audit and the 
 | [`IIE_TRANSACTION_STATE_MACHINE.md`](docs/IIE_TRANSACTION_STATE_MACHINE.md) | Every transaction state, who may move it, and how amounts are frozen |
 | [`IIE_DATABASE_SCHEMA.md`](docs/IIE_DATABASE_SCHEMA.md) | Tables, rules and planned entities |
 | [`IIE_API_DOCUMENTATION.md`](docs/IIE_API_DOCUMENTATION.md) | API conventions and endpoints ([`openapi.json`](docs/openapi.json)) |
+| [`IIE_PAYMENT_ARCHITECTURE.md`](docs/IIE_PAYMENT_ARCHITECTURE.md) | Payment provider abstraction, sandbox, webhooks, ledger, refunds, payouts |
+| [`IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md) | Staging server in St. Vincent: install, backups, restore, security checklist |
 | [`IIE_COUNTRY_ENGINE.md`](docs/IIE_COUNTRY_ENGINE.md) | How countries, currencies and trade lanes are configured |
 | [`IIE_SECURITY.md`](docs/IIE_SECURITY.md) | Security controls, secrets, Gmail limits, known gaps |
 | [`MOCK_FUNCTIONALITY_AUDIT.md`](docs/MOCK_FUNCTIONALITY_AUDIT.md) | Every control that is not yet functional, and how it is labelled |
 
-Payment, logistics and compliance documents are written in the phases that build them.
+Logistics and compliance documents are written in the phases that build them.
 
 ## Important
 

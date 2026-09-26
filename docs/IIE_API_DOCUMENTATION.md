@@ -148,8 +148,8 @@ Permission column: `public` = no session; otherwise the permission required (see
 |---|---|---|---|
 | POST | `/me/checkout/quote` | `order.create` + active account | `{ sellerSlug, addressId }` → frozen quote valid 15 min: lines, `productCost`, `shipping` (+ `isPlaceholder`), `platformFee` (`percent`, `payer`, `chargedToBuyer`), `otherFees`, `dutiesEstimate` (`duty`, `vat`, `paidWhen: ON_ARRIVAL`), `total`, `estimatedLandedTotal`. Errors: `NOTHING_TO_CHECKOUT`, `CART_HAS_ISSUES`, `SELLER_UNAVAILABLE`, `NOT_SHIPPABLE_TO_YOU`, `NO_SHIPPING_RATE`, `LIMIT_EXCEEDED`, `DESTINATION_CLOSED`, `OWN_PRODUCT` |
 | POST | `/me/checkout` | `order.create` + active account | `{ quoteId }` → `201 { iieId }`. Reserves stock for 30 minutes. Errors: `QUOTE_USED`, `QUOTE_EXPIRED`, `STOCK_CHANGED` (409) |
-| GET | `/me/orders` · `/me/orders/{iieId}` | `order.read.own` | Buyer's orders; detail has items, amounts, delivery address, sub-statuses, `timeline`, `paymentDueAt`, `canCancel` |
-| POST | `/me/orders/{iieId}/cancel` | `order.create` | `{ reason? }` while `AWAITING_PAYMENT` |
+| GET | `/me/orders` · `/me/orders/{iieId}` | `order.read.own` | Buyer's orders; detail has items, amounts, delivery address, sub-statuses, `timeline`, `paymentDueAt`, `canCancel`, `canPay`, `sellerConfirmDueAt` |
+| POST | `/me/orders/{iieId}/cancel` | `order.create` | `{ reason? }` while `AWAITING_PAYMENT` or `PAYMENT_FAILED` |
 | GET | `/me/sales` · `/me/sales/{iieId}` | `order.fulfil.own` | Seller's orders; buyer first name and delivery town only; includes `sellerPayout` |
 | GET | `/me/notifications` | signed in | `{ items, unread }` |
 | POST | `/me/notifications/read` | signed in | `{ ids? }` (all when empty) |
@@ -159,6 +159,21 @@ Permission column: `public` = no session; otherwise the permission required (see
 | GET/POST/PATCH | `/admin/duty-estimates[/{id}]` | `config.manage` | `{ destination, hsPrefix, caricomOriginDutyPercent, otherOriginDutyPercent, vatPercent, notes, isPlaceholder }` |
 
 Sellers set who pays the fee with `PATCH /me/storefront { feePayer: "BUYER" | "SELLER" | null }` (null = IIE default).
+
+## Endpoints (Phase 4 — payments)
+
+Design: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md).
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/me/orders/{iieId}/pay` | `order.create` + active account | → `{ redirectUrl }` (the provider's hosted page). Reuses an open attempt. Errors: `NOT_PAYABLE`, `PAYMENT_WINDOW_CLOSED` |
+| POST | `/me/sales/{iieId}/confirm` | `order.fulfil.own` | `204`. Only while `AWAITING_SELLER_CONFIRMATION` |
+| POST | `/me/sales/{iieId}/decline` | `order.fulfil.own` | `{ reason }` (3–500 chars, shown to the buyer) → `204`; full refund |
+| POST | `/webhooks/payments/{provider}` | Public; provider signature over the raw body | → `{ received, duplicate, result }`. Invalid signature `400`. Session cookies are ignored |
+| GET/POST | `/sandbox-pay/{id}` | Public; signed page token | Sandbox hosted page (only with `PAYMENT_PROVIDER=sandbox`); the POST redirects `303` to `/orders/{iieId}?payment=…` |
+| GET | `/admin/transactions/{iieId}/money` | `transaction.read.any` (country-scoped) | `{ balanced, balances, ledger, payments, refunds, events }` |
+| GET | `/admin/payouts` | `payout.approve` | `?status=ON_HOLD\|CANCELLED` |
+| GET/POST | `/admin/exchange-rates` | `config.manage` | `{ base, quote, rate, source }`; append-only. Error `SAME_CURRENCY` |
 
 ### Health
 

@@ -10,7 +10,12 @@ import path from 'node:path';
 const API_PORT = Number(process.env.E2E_API_PORT ?? 4000);
 const WEB_PORT = 3100;
 const root = path.resolve(__dirname, '../..');
-export const EMAIL_DIR = path.join(__dirname, 'e2e/.emails');
+export const EMAIL_DIR = process.env.E2E_EMAIL_DIR ?? path.join(__dirname, 'e2e/.emails');
+/**
+ * Set E2E_BASE_URL to test an already-running site instead (e.g. the staging stack built locally) with sandbox email
+ * written to E2E_EMAIL_DIR and the administrator below already created. No servers are started then.
+ */
+const EXTERNAL_BASE_URL = process.env.E2E_BASE_URL;
 export const ADMIN = { email: 'e2e-admin@iie.example', password: 'e2e-admin-password-123' };
 
 const apiEnv = {
@@ -39,9 +44,9 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
-  use: { baseURL: `http://localhost:${WEB_PORT}`, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  use: { baseURL: EXTERNAL_BASE_URL ?? `http://localhost:${WEB_PORT}`, ignoreHTTPSErrors: !!EXTERNAL_BASE_URL, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: [
+  webServer: EXTERNAL_BASE_URL ? [] : [
     {
       // Prepares the database (migrations, reference data, administrator) and starts the API.
       command: 'node dist/db/migrate.js && node dist/db/seed.js && node dist/cli/create-admin.js && node dist/main.js',

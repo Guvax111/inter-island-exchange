@@ -21,7 +21,7 @@
 | Headers | API: `helmet` defaults, no `x-powered-by`. Web: `nosniff`, `X-Frame-Options: DENY`, `Permissions-Policy`, no-referrer | `bootstrap.ts`, `next.config.ts` |
 | Audit | Append-only `audit_logs` (DB trigger blocks UPDATE/DELETE/TRUNCATE); actor, roles, IP, user agent, session, request ID, before/after for every security and admin action | `audit.service.ts`; audit tests |
 | Errors | Uniform error body with request ID; stack traces never returned | `http-exception.filter.ts` |
-| Configuration | Validated at boot; production refuses sandbox email, insecure cookies and non-https URLs; secrets only from environment | `config/config.ts` |
+| Configuration | Validated at boot; production refuses sandbox email, sandbox payments, local image storage, insecure cookies and non-https URLs; secrets only from environment | `config/config.ts` |
 | Dependencies | `pnpm audit --prod --audit-level high` in CI; TypeScript strict everywhere | `.github/workflows/ci.yml` |
 
 ## Added in Phase 2
@@ -35,6 +35,19 @@
 | Stock integrity | Stock changes recorded in an append-only ledger (DB trigger) | `inventory_movements`; ledger test |
 | Search | Free text is reduced to letters and digits before building the query, so it cannot inject query syntax; parameterised SQL | `marketplace/search.provider.ts`; search test |
 | Cart | Server checks visibility, stock, trade lane and own-product rules on every add; cart holds quantities only, never prices | `cart.service.ts`; cart tests |
+
+## Added in Phase 4
+
+| Area | Control | Where / test |
+|---|---|---|
+| Card data | Buyers pay on the provider's hosted page; IIE never receives card numbers or bank credentials | `payment.provider.ts` |
+| Custody of funds | IIE does not hold money: the provider holds it; IIE records instructions and ledger entries | `IIE_PAYMENT_ARCHITECTURE.md` |
+| Webhooks | Signature over the raw body (HMAC-SHA256, 5-minute timestamp tolerance, constant-time compare); stored and de-duplicated before processing; only verified events change an order; session cookies ignored | `payments.service.ts`; webhook tests |
+| Amount integrity | A paid amount or currency that differs from the order puts it on compliance hold instead of confirming it | mismatch test |
+| Ledger | Double-entry, append-only, balance enforced by the database at commit | `0007_payments_append_only.sql`; ledger integrity test |
+| Refund idempotency | The refund row ID is the provider idempotency key, so a retry cannot refund twice | `payments.service.ts` |
+| Sandbox page | Only with the sandbox provider; per-payment HMAC token; marked "NO REAL MONEY"; production refuses the sandbox | `payments.controllers.ts`; token test |
+| Staging | Only Caddy exposed (HTTPS, HSTS, `noindex`); API docs not published; secrets generated on the server in a `chmod 600` `.env` | `deploy/staging`, `IIE_DEPLOYMENT.md` |
 
 ## Added in Phase 3
 
@@ -54,6 +67,8 @@
 | `DATABASE_URL` | Platform secret manager | On staff change / suspected exposure |
 | `MFA_ENCRYPTION_KEY` | Platform secret manager | Rotation needs a re-encryption job (planned); never reuse between environments |
 | `SMTP_PASS` (Gmail App Password) | Platform secret manager | Revoke in Google Account → Security → App passwords |
+| `SANDBOX_PAYMENT_SECRET` | Server `.env` (staging) | Any time; open sandbox payment pages stop working |
+| Payment provider API keys and webhook secret | Platform secret manager (when contracted) | Per the provider's process |
 
 Never commit `.env` files (`.gitignore` blocks them). `.env.example` documents every key.
 

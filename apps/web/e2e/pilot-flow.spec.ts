@@ -18,7 +18,7 @@ async function linkFromEmail(to: string, kind: 'verify-email' | 'reset-password'
   await expect.poll(count, { timeout: 15_000 }).toBeGreaterThan(0);
   const file = readdirSync(EMAIL_DIR).filter((f) => f.includes(to)).sort().at(-1)!;
   const { text } = JSON.parse(readFileSync(path.join(EMAIL_DIR, file), 'utf8')) as { text: string };
-  const match = new RegExp(`(http://localhost:\\d+/${kind}\\?token=[\\w%-]+)`).exec(text);
+  const match = new RegExp(`(https?://[\\w.:-]+/${kind}\\?token=[\\w%-]+)`).exec(text);
   expect(match, `link in email to ${to}`).not.toBeNull();
   return new URL(match![1]!).pathname + new URL(match![1]!).search;
 }

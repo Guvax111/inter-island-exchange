@@ -57,6 +57,13 @@
       "when": 1790391228509,
       "tag": "0007_payments_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790427269893,
+      "tag": "0008_exchange_rates_no_truncate",
+      "breakpoints": true
     }
   ]
 }

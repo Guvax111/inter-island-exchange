@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/.next
+**/.media
+**/.emails
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+.git
+.env
+.env.*
+!.env.example
+deploy/**/.env*
+!deploy/**/*.example
+backups

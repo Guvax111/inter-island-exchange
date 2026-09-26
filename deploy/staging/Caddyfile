@@ -1,0 +1,33 @@
+# Automatic HTTPS (Let's Encrypt) for the staging domain. The domain's DNS A/AAAA record must point at this
+# server and ports 80 and 443 must be open for the certificate to be issued and renewed.
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		# Staging must not appear in search results.
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	# The API's interactive docs are not published on staging.
+	handle /api/v1/docs* {
+		respond 404
+	}
+	# API calls go straight to the API (one proxy hop, so TRUST_PROXY=true sees the real client address).
+	handle /api/v1/* {
+		reverse_proxy api:4000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

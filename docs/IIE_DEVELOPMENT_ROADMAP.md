@@ -8,8 +8,8 @@
 | 1 | Core foundation: repo, auth, roles, profiles, country engine, database | **Done** (see Phase 1 result below) |
 | 2 | Marketplace: seller approval, storefronts, products, categories, search, cart | **Done** (see Phase 2 result below) |
 | 3 | Orders and transaction engine: checkout, orders, state machine, notifications | **Done** (see Phase 3 result below) |
-| 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | **Planned — awaiting approval** (below) |
-| 5 | Logistics: partners, shipments, tracking, delivery confirmation | Not started |
+| 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | **Done on the sandbox provider** (see Phase 4 result below); staging package for St. Vincent ready |
+| 5 | Logistics: partners, shipments, tracking, delivery confirmation | **Planned — awaiting approval** (below) |
 | 6 | Compliance and disputes | Not started |
 | 7 | Administration and analytics | Not started |
 | 8 | Production readiness | Not started |
@@ -324,7 +324,7 @@ signature-verified) · `POST /me/sales/{iieId}/confirm` · `POST /me/sales/{iieI
 | Payment succeeds after the 30-minute window | Automatic refund, and the buyer is told why |
 | Regulatory: IIE must not hold funds | Funds sit with the licensed provider; IIE records instructions and ledger entries only |
 
-### Decisions requested before Phase 4
+### Decisions requested before Phase 4 (answered 2026-09-26, see below)
 
 - **Payment partner (D2):** which licensed provider(s) IIE will use for St. Lucia and St. Vincent (card and/or bank
   transfer), or confirm building against the sandbox until one is contracted.
@@ -332,3 +332,99 @@ signature-verified) · `POST /me/sales/{iieId}/confirm` · `POST /me/sales/{iieI
   checkout through its customs broker?
 - **Seller confirmation time:** how long a seller has to confirm a paid order before it is refunded automatically
   (suggested: 48 hours).
+
+### Decisions (2026-09-26)
+
+- **Payment partner:** build against the **sandbox** until a licensed provider is contracted.
+- **Duties:** an **estimate, paid on arrival**. IIE does not collect duties.
+- **Seller confirmation:** **48 hours** from payment; otherwise the buyer is refunded automatically.
+- **Staging:** hosted in **St. Vincent and the Grenadines**.
+
+---
+
+## Phase 4 result
+
+**Delivered:** everything in the Phase 4 plan, on the sandbox provider, plus the staging package. 106 API tests
+(12 new payment tests), 6 shared tests and the end-to-end browser test pass. The browser test now goes from listing
+to a confirmed sale: the buyer's card is declined on the sandbox payment page, the buyer retries and pays
+EC$149.50, the seller confirms within the 48 hours, and IIE sees a balanced ledger (EC$149.50 held by the provider =
+EC$90.00 seller + EC$4.50 IIE fee + EC$55.00 logistics) and the seller payout on hold. The same test has been run
+against the staging containers over HTTPS.
+
+Details: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md) (payments) and
+[`IIE_DEPLOYMENT.md`](IIE_DEPLOYMENT.md) (staging).
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| `PaymentProvider.confirm` and `payout` methods | Not in the interface yet | Confirmation arrives by webhook; payout release belongs with delivery confirmation (Phase 6) and depends on the chosen provider's payout product |
+| `GET /admin/transactions/{iieId}/ledger` | `GET /admin/transactions/{iieId}/money` | One view with payments, refunds, ledger lines and balances |
+| Payouts "recorded manually for the pilot" | Payout rows created **on hold** and cancelled on refund; no release yet | Release needs delivery confirmation (Phases 5–6) |
+| FX provider abstraction | `FxService` with administrator-entered, append-only rates (pegs seeded) | No live rate feed is needed while the pilot lane is XCD → XCD |
+| — | Amount mismatch puts the order on compliance hold | A provider reporting a different amount must never be treated as paid |
+| — | Staging package: Docker images, Caddy HTTPS, nightly backups with tested restore, staging banner, `noindex` | Staging is hosted in St. Vincent |
+
+**Staging:** one server in St. Vincent runs the website, API, worker and PostgreSQL in Docker behind Caddy
+(automatic HTTPS). Only ports 80/443 are exposed. Payments are sandbox-only; production refuses the sandbox.
+
+### Needed from IIE
+
+- A server in St. Vincent (2 vCPU, 4 GB RAM, 40 GB SSD, public IP), and a DNS record such as
+  `staging.interislandexchange.com` pointing at it.
+- A Gmail account and app password for staging emails.
+- A second location for backup copies.
+
+---
+
+## Phase 5 plan — Logistics (shipments, tracking, customs, delivery)
+
+### What will be built
+
+1. **Logistics provider abstraction** (`LogisticsProvider`: quote, book pickup, cancel, tracking events, proof of
+   delivery) with a **manual partner portal** as the first adapter: the partner's staff sign in to IIE and update
+   shipments themselves. An API adapter can follow when a partner offers one. No partner names are hard-coded.
+2. **Logistics partners** per lane: partner profile, staff users (role `LOGISTICS_PARTNER`, scoped to their lanes),
+   service levels, and their rate cards replacing the placeholder SLU → SVG rates.
+3. **Shipments:** created when the seller confirms; pickup scheduling with the seller; parcel weight and dimensions
+   recorded at pickup (difference from the declared weight flagged to IIE, not charged to the buyer automatically);
+   shipment number and label.
+4. **Customs documents:** commercial invoice and packing list generated from the order (HS codes, country of
+   origin, values), downloadable by the partner; CARICOM origin declared per line.
+5. **Tracking:** the transaction moves through `PREPARING_SHIPMENT → PICKUP_SCHEDULED → PICKED_UP →
+   EXPORT_PROCESSING → IN_TRANSIT → ARRIVED_DESTINATION → CUSTOMS_PROCESSING → CUSTOMS_CLEARED → OUT_FOR_DELIVERY →
+   DELIVERED`, with `CUSTOMS_HOLD` as an exception. Each update is made by the partner (or IIE), audited and shown
+   on the buyer's timeline; buyer and seller are emailed at key steps. `/track` becomes live for signed-in buyers.
+6. **Delivery confirmation:** proof of delivery (recipient name, time, optional photo) from the partner; the buyer
+   confirms receipt or reports a problem. If the buyer does nothing, the order is treated as delivered after a set
+   number of days. This opens the dispute window (disputes and payout release are Phase 6).
+7. **Seller pickup readiness:** "ready for pickup" action and pickup address per storefront.
+
+### Database changes
+
+`logistics_partners`, `logistics_partner_users`, `partner_lanes`, `shipments`, `shipment_events` (append-only),
+`shipment_parcels`, `customs_documents`, `delivery_proofs`; rate cards move from placeholder rows to partner-owned
+rows.
+
+### API changes
+
+Partner portal: `GET /partner/shipments`, `POST /partner/shipments/{id}/events`, `POST /partner/shipments/{id}/pickup`,
+`POST /partner/shipments/{id}/delivery-proof` · seller: `POST /me/sales/{iieId}/ready` · buyer:
+`POST /me/orders/{iieId}/confirm-delivery`, `POST /me/orders/{iieId}/report-problem` · public/buyer tracking:
+`GET /track/{iieId}` · admin: partners, lanes and rate cards.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| No logistics partner agreed yet | Manual partner portal needs no integration; placeholder rates stay labelled as such |
+| Actual weight differs from declared | Recorded and flagged; the pilot absorbs small differences; policy needed for large ones |
+| Customs holds and extra charges | `CUSTOMS_HOLD` state with reason; duties remain payable by the buyer on arrival |
+| Partner staff update the wrong shipment | Partner users see only their lanes' shipments; every update is audited and reversible by IIE |
+
+### Decisions requested before Phase 5
+
+- **Logistics partner** for St. Lucia → St. Vincent, and whether they would use the IIE partner portal or have a
+  system IIE should connect to.
+- **Their rates** (to replace the placeholders) and service levels (e.g. air vs sea).
+- **Proof of delivery:** is a recipient name and time enough, or is a photo or signature required?
+- **Automatic delivery confirmation:** how many days after `DELIVERED` if the buyer does nothing (suggested: 3).
+- **Customs broker** in St. Vincent, if the partner does not clear customs itself.

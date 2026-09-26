@@ -10,7 +10,7 @@
 - Status columns are `varchar` with `CHECK` constraints (easier to evolve than Postgres enums).
 - All timestamps are `timestamptz`.
 - Money (from Phase 2): `bigint` minor units plus a `char(3)` currency code. No floating point.
-- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`. `transactions.iie_id` cannot be changed. From Phase 3: `transaction_events`, `payment_events`, `ledger_entries`.
+- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`, `payment_events`, `ledger_entries`, `exchange_rates`. `transactions.iie_id` cannot be changed. Every ledger posting must balance (deferred constraint trigger `ledger_entries_balanced`, checked at commit).
 - Secrets are never stored raw: session tokens and one-time tokens are SHA-256 hashes; TOTP secrets are AES-256-GCM encrypted; passwords are argon2id.
 - Schema changes: edit `schema.ts`, run `pnpm --filter @iie/api db:generate`, review the SQL, commit both. CI fails if they drift (`drizzle-kit check`).
 
@@ -103,10 +103,24 @@ businesses 1─N buyer_profiles / seller_profiles
 users 1─N audit_logs (as actor)
 ```
 
+## Payment tables (Phase 4)
+
+| Table | Purpose | Key columns / rules |
+|---|---|---|
+| `payment_intents` | One row per payment attempt | `transaction_id`, `provider`, `provider_intent_id` UQ per provider, `amount_minor`, `currency_code`, `status` (`REQUIRES_ACTION`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `CANCELLED`), `redirect_url` |
+| `payment_events` | Payment and refund history | Append-only; `payment_intent_id`, `type`, amount, `detail` |
+| `provider_webhooks` | Verified provider events as received | UQ (`provider`, `event_id`) for de-duplication; `payload`, `processed_at`, `result`, `error` |
+| `refunds` | Refund requests | `transaction_id`, `payment_intent_id`, amount, `reason`, `requested_by`, `provider_refund_id`, `status` |
+| `payouts` | Seller payout per transaction | `seller_profile_id`, amount, `status` (`ON_HOLD`, `CANCELLED`; release in Phase 6) |
+| `ledger_entries` | Double-entry lines | Append-only; `posting_id`, `transaction_id`, `account`, `direction`, `amount_minor` > 0, balanced per posting |
+| `exchange_rates` | FX rates | Append-only; `base_currency`, `quote_currency`, `rate` numeric(18,8), `source`, `effective_at` |
+
+`transactions.seller_confirm_due_at` (partial index) drives the 48-hour automatic refund.
+
 ## Planned tables (later phases)
 
 Designed in [`IIE_PLATFORM_ARCHITECTURE.md` §7](./IIE_PLATFORM_ARCHITECTURE.md#7-data-model-core-entities):
 restricted_product_rules (Phase 6);
-payment_intents, payment_events, refunds, payouts, payout_accounts, ledger_entries, exchange_rates, provider_webhooks (Phase 4);
+payout_accounts (with the licensed payment provider);
 logistics_partners, shipments, shipment_events, customs_documents (Phase 5);
 compliance_checks, kyc_verifications, disputes, dispute_evidence (Phase 6); messages, reviews (Phase 7).

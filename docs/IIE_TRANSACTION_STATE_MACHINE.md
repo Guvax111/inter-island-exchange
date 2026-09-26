@@ -39,7 +39,7 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 | SELLER | The seller on their own sale |
 | ADMIN | IIE staff with the relevant permission |
 | SYSTEM | IIE's own jobs (order placement, expiry, automatic steps) |
-| PAYMENT | The licensed payment provider (webhooks, Phase 4) |
+| PAYMENT | The payment provider, through verified webhooks (sandbox provider until a licensed one is contracted) |
 | LOGISTICS | The assigned logistics partner (Phase 5) |
 | CUSTOMS | Customs broker (Phase 5) |
 | COMPLIANCE | Compliance officer (Phase 6) |
@@ -54,7 +54,7 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 | PAYMENT_PROCESSING | PAYMENT_CONFIRMED / PAYMENT_FAILED | PAYMENT | 4 |
 | PAYMENT_FAILED | AWAITING_PAYMENT (retry) | BUYER, SYSTEM | 4 |
 | PAYMENT_CONFIRMED | AWAITING_SELLER_CONFIRMATION | SYSTEM | 4 |
-| AWAITING_SELLER_CONFIRMATION | SELLER_CONFIRMED | SELLER, ADMIN | 4 |
+| AWAITING_SELLER_CONFIRMATION | SELLER_CONFIRMED | SELLER, ADMIN | 4 · the seller has **48 hours** from payment (`seller_confirm_due_at`) |
 | SELLER_CONFIRMED | PREPARING_SHIPMENT | SELLER, SYSTEM | 5 |
 | PREPARING_SHIPMENT | PICKUP_SCHEDULED | LOGISTICS, ADMIN | 5 |
 | PICKUP_SCHEDULED → PICKED_UP → EXPORT_PROCESSING → IN_TRANSIT → ARRIVED_DESTINATION | | LOGISTICS | 5 |
@@ -73,11 +73,12 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 |---|---|---|---|
 | CREATED | CANCELLED | SYSTEM | |
 | AWAITING_PAYMENT | CANCELLED | BUYER, SYSTEM, ADMIN | **Phase 3.** Buyer cancels, or the 30-minute window expires; reserved stock is released |
-| PAYMENT_FAILED | CANCELLED | BUYER, SYSTEM, ADMIN | |
-| AWAITING_SELLER_CONFIRMATION | REFUNDED | SELLER, ADMIN, SYSTEM | Once paid, cancelling is always a refund |
+| PAYMENT_FAILED | CANCELLED | BUYER, SYSTEM, ADMIN | The retry window is the original 30-minute deadline |
+| AWAITING_SELLER_CONFIRMATION | REFUNDED | SELLER, ADMIN, SYSTEM | **Phase 4.** Seller declines (with a reason), or SYSTEM after 48 hours without confirmation. Full refund, stock returned, payout cancelled |
+| CANCELLED | REFUNDED | SYSTEM | **Phase 4.** A payment that arrives after the order was cancelled is refunded at once |
 | CUSTOMS_PROCESSING | CUSTOMS_HOLD | LOGISTICS, CUSTOMS, ADMIN | Hold |
 | CUSTOMS_HOLD | (state it interrupted) / REFUNDED | CUSTOMS, ADMIN / ADMIN | |
-| Any state from AWAITING_PAYMENT to DISPUTE_WINDOW | COMPLIANCE_HOLD | COMPLIANCE, ADMIN | Hold |
+| Any state from AWAITING_PAYMENT to DISPUTE_WINDOW | COMPLIANCE_HOLD | COMPLIANCE, ADMIN, SYSTEM | Hold. SYSTEM places it when the provider reports a paid amount or currency that differs from the order |
 | COMPLIANCE_HOLD | (state it interrupted) / REFUNDED / CANCELLED | COMPLIANCE, ADMIN / ADMIN / ADMIN | |
 | DELIVERED, DISPUTE_WINDOW | DISPUTED | BUYER | Hold; payout cannot be approved while open |
 | DISPUTED | PAYOUT_APPROVED / REFUNDED / PARTIALLY_REFUNDED | ADMIN | Dispute outcomes |
@@ -116,5 +117,11 @@ Set automatically when a state is entered:
 ## Stock
 
 Placing an order reserves stock (`inventory.quantity_reserved`, `inventory_reservations`) under row locks, so
-the last unit cannot be sold twice. Cancellation or expiry releases it. Payment (Phase 4) will consume the
-reservation and record a `SALE` movement in the stock ledger.
+the last unit cannot be sold twice. Cancellation or expiry releases it. Payment consumes the reservation (on-hand
+and reserved both go down) and records a `SALE` movement; a refund before shipping puts the units back with a
+`RETURN` movement. A payment still `PAYMENT_PROCESSING` (e.g. bank transfer) is not cancelled by the 30-minute
+expiry.
+
+## Payments
+
+How payment events move a transaction, the ledger postings and refunds: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md).

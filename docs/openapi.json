@@ -2790,6 +2790,190 @@
           "admin"
         ]
       }
+    },
+    "/api/v1/me/orders/{iieId}/pay": {
+      "post": {
+        "operationId": "PaymentActionsController_pay",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/sales/{iieId}/confirm": {
+      "post": {
+        "operationId": "PaymentActionsController_confirm",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/me/sales/{iieId}/decline": {
+      "post": {
+        "operationId": "PaymentActionsController_decline",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineSaleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "buyer"
+        ]
+      }
+    },
+    "/api/v1/webhooks/payments/{provider}": {
+      "post": {
+        "operationId": "PaymentWebhooksController_receive",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/v1/admin/transactions/{iieId}/money": {
+      "get": {
+        "operationId": "AdminPaymentsController_money",
+        "parameters": [
+          {
+            "name": "iieId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/payouts": {
+      "get": {
+        "operationId": "AdminPaymentsController_payoutList",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/exchange-rates": {
+      "get": {
+        "operationId": "AdminPaymentsController_rates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminPaymentsController_addRate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeRateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
     }
   },
   "info": {
@@ -3985,6 +4169,47 @@
             "type": "boolean"
           }
         }
+      },
+      "DeclineSaleDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ExchangeRateDto": {
+        "type": "object",
+        "properties": {
+          "base": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "quote": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "rate": {
+            "type": "string",
+            "pattern": "^\\d{1,9}(\\.\\d{1,8})?$"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "base",
+          "quote",
+          "rate",
+          "source"
+        ]
       }
     }
   }
