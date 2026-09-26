@@ -3008,6 +3008,29 @@
         ]
       }
     },
+    "/api/v1/countries/{code}/partners": {
+      "get": {
+        "operationId": "CountryPartnersController_list",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "countries"
+        ]
+      }
+    },
     "/api/v1/me/orders/{iieId}/confirm-delivery": {
       "post": {
         "operationId": "BuyerDeliveryController_confirm",

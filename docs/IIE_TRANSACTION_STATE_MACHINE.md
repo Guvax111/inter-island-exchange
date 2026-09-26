@@ -40,8 +40,8 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 | ADMIN | IIE staff with the relevant permission |
 | SYSTEM | IIE's own jobs (order placement, expiry, automatic steps) |
 | PAYMENT | The payment provider, through verified webhooks (sandbox provider until a licensed one is contracted) |
-| LOGISTICS | The assigned logistics partner (Phase 5) |
-| CUSTOMS | Customs broker (Phase 5) |
+| LOGISTICS | Staff of the shipment's assigned logistics partner (partner portal) |
+| CUSTOMS | Whoever clears customs for the shipment: the assigned customs broker's staff, or the carrier's staff when it clears customs itself |
 | COMPLIANCE | Compliance officer (Phase 6) |
 
 ## Main flow
@@ -55,13 +55,13 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 | PAYMENT_FAILED | AWAITING_PAYMENT (retry) | BUYER, SYSTEM | 4 |
 | PAYMENT_CONFIRMED | AWAITING_SELLER_CONFIRMATION | SYSTEM | 4 |
 | AWAITING_SELLER_CONFIRMATION | SELLER_CONFIRMED | SELLER, ADMIN | 4 · the seller has **48 hours** from payment (`seller_confirm_due_at`) |
-| SELLER_CONFIRMED | PREPARING_SHIPMENT | SELLER, SYSTEM | 5 |
+| SELLER_CONFIRMED | PREPARING_SHIPMENT | SELLER, SYSTEM | 5 · seller marks the order ready for pickup; the shipment is created and assigned |
 | PREPARING_SHIPMENT | PICKUP_SCHEDULED | LOGISTICS, ADMIN | 5 |
 | PICKUP_SCHEDULED → PICKED_UP → EXPORT_PROCESSING → IN_TRANSIT → ARRIVED_DESTINATION | | LOGISTICS | 5 |
 | ARRIVED_DESTINATION | CUSTOMS_PROCESSING | LOGISTICS, CUSTOMS | 5 |
 | CUSTOMS_PROCESSING | CUSTOMS_CLEARED | LOGISTICS, CUSTOMS | 5 |
 | CUSTOMS_CLEARED → OUT_FOR_DELIVERY → DELIVERED | | LOGISTICS | 5 |
-| DELIVERED | DELIVERY_CONFIRMED | BUYER, SYSTEM (automatic after a set time) | 5 |
+| DELIVERED | DELIVERY_CONFIRMED | BUYER, SYSTEM | 5 · SYSTEM confirms **3 days** after delivery is recorded (`delivery_confirm_due_at`) |
 | DELIVERY_CONFIRMED | DISPUTE_WINDOW | SYSTEM | 6 |
 | DISPUTE_WINDOW | PAYOUT_APPROVED | SYSTEM, ADMIN | 6 |
 | PAYOUT_APPROVED | PAYOUT_PROCESSING | SYSTEM, PAYMENT | 4/6 |
@@ -77,7 +77,7 @@ Anything not listed is refused with `409 INVALID_TRANSITION`; the right move by 
 | AWAITING_SELLER_CONFIRMATION | REFUNDED | SELLER, ADMIN, SYSTEM | **Phase 4.** Seller declines (with a reason), or SYSTEM after 48 hours without confirmation. Full refund, stock returned, payout cancelled |
 | CANCELLED | REFUNDED | SYSTEM | **Phase 4.** A payment that arrives after the order was cancelled is refunded at once |
 | CUSTOMS_PROCESSING | CUSTOMS_HOLD | LOGISTICS, CUSTOMS, ADMIN | Hold |
-| CUSTOMS_HOLD | (state it interrupted) / REFUNDED | CUSTOMS, ADMIN / ADMIN | |
+| CUSTOMS_HOLD | (state it interrupted) / REFUNDED | CUSTOMS, ADMIN / ADMIN | The customs party records the hold with a reason and the release |
 | Any state from AWAITING_PAYMENT to DISPUTE_WINDOW | COMPLIANCE_HOLD | COMPLIANCE, ADMIN, SYSTEM | Hold. SYSTEM places it when the provider reports a paid amount or currency that differs from the order |
 | COMPLIANCE_HOLD | (state it interrupted) / REFUNDED / CANCELLED | COMPLIANCE, ADMIN / ADMIN / ADMIN | |
 | DELIVERED, DISPUTE_WINDOW | DISPUTED | BUYER | Hold; payout cannot be approved while open |
@@ -125,3 +125,7 @@ expiry.
 ## Payments
 
 How payment events move a transaction, the ledger postings and refunds: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md).
+
+## Logistics
+
+How shipments are assigned, who records each step and how delivery is confirmed: [`IIE_LOGISTICS_ARCHITECTURE.md`](IIE_LOGISTICS_ARCHITECTURE.md). A buyer's "report a problem" moves `DELIVERED` to `DISPUTED` (hold); resolving disputes is Phase 6.

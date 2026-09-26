@@ -175,6 +175,30 @@ Design: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md).
 | GET | `/admin/payouts` | `payout.approve` | `?status=ON_HOLD\|CANCELLED` |
 | GET/POST | `/admin/exchange-rates` | `config.manage` | `{ base, quote, rate, source }`; append-only. Error `SAME_CURRENCY` |
 
+## Endpoints (Phase 5 — logistics)
+
+Design and the full list: [`IIE_LOGISTICS_ARCHITECTURE.md`](IIE_LOGISTICS_ARCHITECTURE.md#api).
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/me/sales/{iieId}/ready` | `order.fulfil.own` | `{ parcelWeightGrams?, pickupNotes? }` → `201 { shipmentId, assigned }`. Only `SELLER_CONFIRMED` |
+| POST | `/me/orders/{iieId}/confirm-delivery` | `order.read.own` | `204`. Only `DELIVERED` |
+| POST | `/me/orders/{iieId}/report-problem` | `dispute.create.own` | `{ reason }` → `204` |
+| GET | `/partner/shipments` · `/partner/shipments/{iieId}` | `shipment.read.assigned` + membership | Others' shipments are "not found" |
+| GET | `/partner/shipments/{iieId}/commercial-invoice` | `shipment.read.assigned` + membership | Customs document data |
+| POST | `/partner/shipments/{iieId}/steps` | carrier: `shipment.update.assigned`; customs: `customs.document.manage` | `{ step, … }`; dates are ISO 8601 strings. Errors: `INVALID_TRANSITION`, `VALIDATION_FAILED`, `403` for the wrong party |
+| POST | `/partner/shipments/{iieId}/delivery` | `shipment.update.assigned` (carrier) | Multipart `recipientName`, `deliveredAt`, `note?`, `photo?`, `signature?`. Errors: `DELIVERY_IN_FUTURE`, `DELIVERY_BEFORE_PICKUP` |
+| GET | `/countries/{code}/partners` | Public | `{ logisticsPartners, customsBrokers }` (names only) |
+| GET/POST/PATCH | `/admin/partners[/{id}]` | `partner.manage` | Errors: `UNKNOWN_COUNTRY` |
+| POST/DELETE | `/admin/partners/{id}/lanes[/{laneId}]` | `partner.manage` | `{ origin, destination }`. Errors: `NOT_A_CARRIER`, `UNKNOWN_LANE` |
+| POST/DELETE | `/admin/partners/{id}/members[/{userId}]` | `partner.manage` | `{ email, firstName, lastName }` → `{ userId, newAccount }`. Errors: `ALREADY_A_MEMBER` |
+| GET | `/admin/shipments` | `transaction.read.any` (country-scoped) | `?view=attention\|all`; `issues[]` |
+| PATCH | `/admin/shipments/{iieId}` | `partner.manage` | `{ logisticsPartnerId?, customsBrokerId? }`. Errors: `INVALID_PARTNER`, `WRONG_COUNTRY` |
+
+Order detail (`/me/orders/{iieId}`, `/me/sales/{iieId}`, `/admin/transactions/{iieId}`) adds `canMarkReady`,
+`canConfirmDelivery`, `deliveryConfirmDueAt` and `shipment` (partners, events, customs, weights except for buyers, proof
+of delivery; image links for buyers and staff only).
+
 ### Health
 
 `GET /health` (public) → `{ status: "ok" }` after a database round trip.

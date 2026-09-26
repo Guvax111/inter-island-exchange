@@ -10,7 +10,7 @@
 - Status columns are `varchar` with `CHECK` constraints (easier to evolve than Postgres enums).
 - All timestamps are `timestamptz`.
 - Money (from Phase 2): `bigint` minor units plus a `char(3)` currency code. No floating point.
-- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`, `payment_events`, `ledger_entries`, `exchange_rates`. `transactions.iie_id` cannot be changed. Every ledger posting must balance (deferred constraint trigger `ledger_entries_balanced`, checked at commit).
+- Append-only tables reject `UPDATE`, `DELETE` and `TRUNCATE` with a trigger (`iie_reject_modification`). Today: `audit_logs`, `inventory_movements`, `transaction_events`, `payment_events`, `ledger_entries`, `exchange_rates`, `shipment_events`, `delivery_proofs`. `transactions.iie_id` cannot be changed. Every ledger posting must balance (deferred constraint trigger `ledger_entries_balanced`, checked at commit).
 - Secrets are never stored raw: session tokens and one-time tokens are SHA-256 hashes; TOTP secrets are AES-256-GCM encrypted; passwords are argon2id.
 - Schema changes: edit `schema.ts`, run `pnpm --filter @iie/api db:generate`, review the SQL, commit both. CI fails if they drift (`drizzle-kit check`).
 
@@ -117,10 +117,23 @@ users 1─N audit_logs (as actor)
 
 `transactions.seller_confirm_due_at` (partial index) drives the 48-hour automatic refund.
 
+## Logistics tables (Phase 5)
+
+| Table | Purpose | Key columns / rules |
+|---|---|---|
+| `service_partners` | Logistics partners and customs brokers | `kind` (`LOGISTICS`, `CUSTOMS_BROKER`), `country_id`, contact email and phone, `clears_customs`, `active` |
+| `partner_members` | Partner staff | UQ (`partner_id`, `user_id`); membership limits what staff see |
+| `partner_lanes` | Lanes a carrier serves | UQ (`partner_id`, `lane_id`), `active` |
+| `shipments` | One per transaction | `transaction_id` UQ, `logistics_partner_id`, `customs_broker_id`, pickup/delivery address and contact snapshots, `declared_/parcel_/actual_weight_grams`, `weight_flagged`, `pickup_scheduled_for`, `picked_up_at`, `tracking_reference`, `customs_entry_number`, `duties_assessed_minor`, `delivered_at` |
+| `shipment_events` | Tracking history | Append-only; `step`, actor, partner, `location`, `note` |
+| `delivery_proofs` | Proof of delivery | Append-only; UQ `shipment_id`; `recipient_name`, `delivered_at`, optional `photo_media_id`, `signature_media_id`, `note`, `recorded_by` |
+
+`transactions.delivery_confirm_due_at` (partial index) drives the 3-day automatic confirmation. `media_assets.kind` adds
+`DELIVERY_PHOTO` and `DELIVERY_SIGNATURE`.
+
 ## Planned tables (later phases)
 
 Designed in [`IIE_PLATFORM_ARCHITECTURE.md` §7](./IIE_PLATFORM_ARCHITECTURE.md#7-data-model-core-entities):
 restricted_product_rules (Phase 6);
 payout_accounts (with the licensed payment provider);
-logistics_partners, shipments, shipment_events, customs_documents (Phase 5);
 compliance_checks, kyc_verifications, disputes, dispute_evidence (Phase 6); messages, reviews (Phase 7).

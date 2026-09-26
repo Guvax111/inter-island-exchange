@@ -9,8 +9,8 @@
 | 2 | Marketplace: seller approval, storefronts, products, categories, search, cart | **Done** (see Phase 2 result below) |
 | 3 | Orders and transaction engine: checkout, orders, state machine, notifications | **Done** (see Phase 3 result below) |
 | 4 | Payments: provider abstraction, sandbox, multi-currency, refunds | **Done on the sandbox provider** (see Phase 4 result below); staging package for St. Vincent ready |
-| 5 | Logistics: partners, shipments, tracking, delivery confirmation | **Planned — awaiting approval** (below) |
-| 6 | Compliance and disputes | Not started |
+| 5 | Logistics: partners, shipments, tracking, delivery confirmation | **Done** (see Phase 5 result below); partner to be selected |
+| 6 | Compliance, disputes and payout release | **Planned — awaiting decisions** (below) |
 | 7 | Administration and analytics | Not started |
 | 8 | Production readiness | Not started |
 
@@ -420,7 +420,7 @@ Partner portal: `GET /partner/shipments`, `POST /partner/shipments/{id}/events`,
 | Customs holds and extra charges | `CUSTOMS_HOLD` state with reason; duties remain payable by the buyer on arrival |
 | Partner staff update the wrong shipment | Partner users see only their lanes' shipments; every update is audited and reversible by IIE |
 
-### Decisions requested before Phase 5
+### Decisions requested before Phase 5 (answered 2026-09-26, see below)
 
 - **Logistics partner** for St. Lucia → St. Vincent, and whether they would use the IIE partner portal or have a
   system IIE should connect to.
@@ -428,3 +428,88 @@ Partner portal: `GET /partner/shipments`, `POST /partner/shipments/{id}/events`,
 - **Proof of delivery:** is a recipient name and time enough, or is a photo or signature required?
 - **Automatic delivery confirmation:** how many days after `DELIVERED` if the buyer does nothing (suggested: 3).
 - **Customs broker** in St. Vincent, if the partner does not clear customs itself.
+
+### Decisions (2026-09-26)
+
+- **Logistics partner:** to be determined; partners, once selected, use the **IIE partner portal**.
+- **Shipping rates:** keep the **placeholder** rates until then.
+- **Proof of delivery:** recipient name and time, **and optionally** a photo and/or a signature.
+- **Automatic delivery confirmation:** **3 days** after delivery.
+- **Customs:** **customs brokers in St. Vincent** when the partner does not clear customs itself.
+
+---
+
+## Phase 5 result
+
+**Delivered:** everything in the Phase 5 plan. 116 API tests (10 new: the full shipment journey, access boundaries,
+broker vs carrier customs, weight flag, customs hold and release, proof-of-delivery images and their privacy, buyer
+confirmation, problem reports, the 3-day automatic confirmation, staff invitations, the public partner list, and a
+check that the API documentation builds), 6 shared tests and the end-to-end browser test pass. The browser test now
+runs the whole pilot: IIE adds a carrier and a St. Vincent customs broker and invites their staff, who set their
+passwords from the email; the seller packs; the carrier (on a phone) schedules, collects and ships; the broker clears
+customs with the commercial invoice and records EC$21.60 duties assessed; the carrier delivers with a photo and a drawn
+signature; the buyer sees it all and confirms receipt.
+
+Details: [`IIE_LOGISTICS_ARCHITECTURE.md`](IIE_LOGISTICS_ARCHITECTURE.md).
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| `LogisticsProvider` interface with the portal as first adapter | Partner portal only; no provider interface yet | Partners will use the portal (decision above). An API adapter is designed in when a partner offers an API, behind the same steps |
+| Shipment created when the seller confirms | Created when the seller marks the order **ready for pickup** | Partners should only see parcels that are packed |
+| `customs_documents` table | Commercial invoice generated on demand from the frozen order | The order snapshot never changes, so a stored copy adds nothing yet |
+| Rate cards owned by partners | Placeholder rates kept (decision above) | No partner yet |
+| — | Public list of partners per country; Logistics page | Replaces the "Coming soon" pages |
+| — | Delivery times accepted to the minute | Found by the browser test: minute-precision inputs could fall seconds before "ready for pickup" |
+
+**Still open:** "Report a problem" is recorded and stops the payout and automatic confirmation, but resolving it
+(refund, partial refund or release) is Phase 6. Seller payouts stay on hold until Phase 6.
+
+---
+
+## Phase 6 plan — Disputes, payout release and compliance
+
+### What will be built
+
+1. **Review period:** after delivery is confirmed, a short review window (`DISPUTE_WINDOW`) during which the buyer can
+   still report a problem; when it ends the payout is approved automatically.
+2. **Disputes:** a reported problem becomes a dispute case with the buyer's reason, evidence uploads (photos) from buyer
+   and seller, messages, and IIE decisions: **full refund**, **partial refund**, or **reject** (release the payout).
+   Refunds go through the payment provider and the ledger (reversal postings, partial where needed). Deadlines for the
+   seller to respond.
+3. **Payout release:** approved payouts are released through the payment provider (sandbox until contracted) or, for the
+   pilot, recorded as paid by bank transfer with a reference; ledger postings move `seller_payable`, `iie_fee_revenue` and
+   `logistics_payable` out; `COMPLETED` at the end. Payout statements for sellers.
+4. **Logistics payable:** record payments to the logistics partner against `logistics_payable` (manual for the pilot).
+5. **Compliance:** restricted and prohibited goods rules per country (checked at listing and checkout), seller
+   verification documents (business registration, ID) reviewed by compliance officers, compliance hold and release
+   screens, transaction limits by verification level.
+6. **Admin tools:** dispute queue, payout queue, compliance queue; every decision audited.
+
+### Database changes
+
+`disputes`, `dispute_messages`, `dispute_evidence`, `payout_batches` (or per-payout release records),
+`partner_settlements`, `restricted_product_rules`, `kyc_documents`, `compliance_checks`; payouts gain release details.
+
+### API changes
+
+Buyer/seller: `GET/POST /me/disputes/{iieId}` (messages, evidence) · admin: dispute decisions, payout approval and
+release, compliance reviews and holds · seller: payout history.
+
+### Risks
+
+| Risk | Mitigation |
+|---|---|
+| Refund or payout sent twice | Idempotency keys per refund/payout; ledger balances enforced by the database |
+| Evidence contains personal data | Private media, visible to the parties and IIE only; retention period |
+| Regulatory: IIE deciding who gets held funds | Decisions are instructions to the licensed provider under its terms; legal review before launch |
+| Prohibited goods listed | Rules checked at listing and checkout; compliance review queue |
+
+### Decisions requested before Phase 6
+
+- **Review period:** how long after delivery is confirmed before the seller is paid (suggested: **7 days**)?
+- **Returns:** when a buyer is refunded, must they return the goods, and who pays return shipping?
+- **Partial refunds:** may IIE decide partial refunds (e.g. one pack missing), or full refunds only for the pilot?
+- **Seller payouts in the pilot:** paid by IIE's payment provider when contracted, or recorded bank transfers until then?
+- **Restricted goods:** the list of prohibited or licensed products for St. Lucia and St. Vincent (e.g. medicines,
+  alcohol, agricultural products) — or should the pilot stay limited to baby products?
+- **Seller verification:** which documents are required (business registration certificate, ID, proof of address)?

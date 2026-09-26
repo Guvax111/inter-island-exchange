@@ -36,6 +36,18 @@
 | Search | Free text is reduced to letters and digits before building the query, so it cannot inject query syntax; parameterised SQL | `marketplace/search.provider.ts`; search test |
 | Cart | Server checks visibility, stock, trade lane and own-product rules on every add; cart holds quantities only, never prices | `cart.service.ts`; cart tests |
 
+## Added in Phase 5
+
+| Area | Control | Where / test |
+|---|---|---|
+| Partner access | Partner roles give permissions; **membership** of the assigned partner decides which shipments are visible or changeable. Other partners' staff get "not found" | `shipments.service.ts`; logistics tests |
+| Separation of duties | The carrier cannot record customs steps (unless it clears customs); the broker cannot move or deliver the parcel | logistics tests |
+| Staff onboarding | IIE-invited only (no self sign-up as a partner); 72-hour single-use set-password link that also verifies the email; removal revokes the role | `partners.service.ts`, `auth.service.ts`; invitation tests |
+| Personal data | Delivery address and buyer phone go to the assigned partners only; sellers see town and country; the public partner list has names only | logistics tests |
+| Proof of delivery | Images validated and re-encoded, metadata removed, private to the buyer, assigned partners and IIE staff; proof and tracking history append-only | `media.service.ts`; `0010_logistics_append_only.sql`; tests |
+| Delivery time integrity | No future times; not before the parcel was ready for pickup | tests |
+| Weight discrepancies | Parcels over 10% heavier than declared are flagged to IIE, never charged automatically | tests |
+
 ## Added in Phase 4
 
 | Area | Control | Where / test |

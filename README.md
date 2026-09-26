@@ -2,7 +2,7 @@
 
 A secure digital marketplace and trade platform connecting buyers and sellers across CARICOM.
 
-**Status:** Phases 1–4 complete (payments on a sandbox provider).
+**Status:** Phases 1–5 complete (payments on a sandbox provider; logistics partner to be selected).
 - **Phase 1 (core foundation):** registration, email verification, login with optional two-step verification,
   roles and permissions, onboarding, the country engine, admin tools and an append-only audit log.
 - **Phase 2 (marketplace):** seller approval, storefronts, product listings with IIE review, photos, stock, search,
@@ -13,8 +13,12 @@ A secure digital marketplace and trade platform connecting buyers and sellers ac
 - **Phase 4 (payments):** pay on the provider's hosted page (sandbox until a licensed provider is contracted),
   signed webhooks, double-entry ledger, seller confirmation within 48 hours with automatic refund, payouts on hold.
 
+- **Phase 5 (logistics):** logistics partners and customs brokers configured by IIE, partner portal (tracking and customs
+  steps, commercial invoice, proof of delivery with photo and signature), buyer delivery confirmation with automatic
+  confirmation after 3 days.
+
 Staging is hosted in St. Vincent and the Grenadines: see [`docs/IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md).
-Phase 5 (logistics) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+Phase 6 (disputes, payout release, compliance) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
 
 **Contact:** Inter-Island Exchange, Inc. · Arnos Vale, St. Vincent and the Grenadines · info@interislandexchange.com · (347) 497-3977
 
@@ -22,7 +26,7 @@ Phase 5 (logistics) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md)
 
 ```
 apps/api         NestJS API (/api/v1), database schema and migrations (Drizzle), outbox worker, CLIs
-apps/web         Next.js website: public pages, sign-up/login, onboarding, account, admin
+apps/web         Next.js website: public pages, sign-up/login, onboarding, account, partner portal, admin
 packages/shared  Validation schemas, roles and permissions, statuses and money helpers used by both apps
 deploy/staging   Docker Compose stack for the St. Vincent staging server (Caddy HTTPS, backups)
 docs/            Audit, architecture, schema, API, payments, deployment, country engine, security, roadmap
@@ -80,12 +84,13 @@ CI runs the same steps plus a migration drift check, a dependency audit and the 
 | [`IIE_DATABASE_SCHEMA.md`](docs/IIE_DATABASE_SCHEMA.md) | Tables, rules and planned entities |
 | [`IIE_API_DOCUMENTATION.md`](docs/IIE_API_DOCUMENTATION.md) | API conventions and endpoints ([`openapi.json`](docs/openapi.json)) |
 | [`IIE_PAYMENT_ARCHITECTURE.md`](docs/IIE_PAYMENT_ARCHITECTURE.md) | Payment provider abstraction, sandbox, webhooks, ledger, refunds, payouts |
+| [`IIE_LOGISTICS_ARCHITECTURE.md`](docs/IIE_LOGISTICS_ARCHITECTURE.md) | Partners, customs brokers, shipments, proof of delivery, delivery confirmation |
 | [`IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md) | Staging server in St. Vincent: install, backups, restore, security checklist |
 | [`IIE_COUNTRY_ENGINE.md`](docs/IIE_COUNTRY_ENGINE.md) | How countries, currencies and trade lanes are configured |
 | [`IIE_SECURITY.md`](docs/IIE_SECURITY.md) | Security controls, secrets, Gmail limits, known gaps |
 | [`MOCK_FUNCTIONALITY_AUDIT.md`](docs/MOCK_FUNCTIONALITY_AUDIT.md) | Every control that is not yet functional, and how it is labelled |
 
-Logistics and compliance documents are written in the phases that build them.
+Compliance and dispute documents are written in the phase that builds them.
 
 ## Important
 
