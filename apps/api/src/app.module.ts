@@ -49,7 +49,7 @@ import { createPaymentProvider, PAYMENT_PROVIDER, type PaymentProvider } from '.
 import { PaymentsService } from './payments/payments.service';
 import { PartnersService } from './logistics/partners.service';
 import { ShipmentsService } from './logistics/shipments.service';
-import { AdminLogisticsController, BuyerDeliveryController, PartnerPortalController, SellerShipmentController } from './logistics/logistics.controllers';
+import { AdminLogisticsController, BuyerDeliveryController, CountryPartnersController, PartnerPortalController, SellerShipmentController } from './logistics/logistics.controllers';
 import { LedgerService } from './payments/ledger.service';
 import { FxService } from './payments/fx.service';
 import { AdminPaymentsController, PaymentActionsController, PaymentWebhooksController, SandboxPaymentController } from './payments/payments.controllers';
@@ -118,6 +118,7 @@ export class AppModule {
         SandboxPaymentController,
         AdminPaymentsController,
         SellerShipmentController,
+        CountryPartnersController,
         BuyerDeliveryController,
         PartnerPortalController,
         AdminLogisticsController,

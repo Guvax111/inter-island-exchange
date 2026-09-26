@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { CostBreakdown } from '@/components/orders/cost-breakdown';
+import { ShipmentPanel } from '@/components/orders/shipment-panel';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
@@ -69,6 +70,12 @@ export default function AdminTransactionsPage() {
                 </li>
               ))}
             </ul>
+            {d.shipment && (
+              <section className="space-y-2">
+                <h3 className="font-semibold">Shipment</h3>
+                <ShipmentPanel shipment={d.shipment} showWeights />
+              </section>
+            )}
             {money.data && <MoneySection m={money.data} />}
           </div>
         )}

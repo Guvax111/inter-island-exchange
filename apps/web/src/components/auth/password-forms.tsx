@@ -52,7 +52,10 @@ export function ForgotPasswordForm() {
 }
 
 export function ResetPasswordForm() {
-  const token = useSearchParams().get('token') ?? '';
+  const params = useSearchParams();
+  const token = params.get('token') ?? '';
+  // Partner staff invited by IIE arrive here to choose their first password.
+  const invite = params.get('invite') === '1';
   const [password, setPassword] = useState('');
   const [fieldError, setFieldError] = useState<string>();
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +81,7 @@ export function ResetPasswordForm() {
 
   if (done) {
     return (
-      <AuthCard title="Password changed" description="Your password was reset and all devices were signed out.">
+      <AuthCard title={invite ? 'Password saved' : 'Password changed'} description={invite ? 'Your account is ready. Sign in to open the partner portal.' : 'Your password was reset and all devices were signed out.'}>
         <Button asChild className="w-full">
           <Link href="/login">Sign in</Link>
         </Button>
@@ -86,7 +89,7 @@ export function ResetPasswordForm() {
     );
   }
   return (
-    <AuthCard title="Choose a new password">
+    <AuthCard title={invite ? 'Welcome to IIE: choose your password' : 'Choose a new password'}>
       <form onSubmit={onSubmit} className="space-y-4">
         <FormError message={token ? error : 'This link is missing its code. Request a new reset email.'} />
         <Field
@@ -100,7 +103,7 @@ export function ResetPasswordForm() {
           hint={`At least ${PASSWORD_MIN_LENGTH} characters.`}
         />
         <Button type="submit" className="w-full" disabled={submitting || !token}>
-          {submitting ? 'Saving…' : 'Save new password'}
+          {submitting ? 'Saving…' : invite ? 'Save password' : 'Save new password'}
         </Button>
       </form>
     </AuthCard>

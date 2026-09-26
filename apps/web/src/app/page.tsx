@@ -7,7 +7,7 @@ const ctas = [
   { href: '/signup?type=SELLER', label: 'Become a Seller', icon: Store },
   { href: '/signup?type=BUYER', label: 'Register as a Buyer', icon: PackageSearch },
   { href: '/countries', label: 'Explore Countries', icon: Globe2 },
-  { href: '/track', label: 'Track a Shipment', icon: Truck, soon: true },
+  { href: '/track', label: 'Track a Shipment', icon: Truck, soon: false },
 ];
 
 export default function HomePage() {

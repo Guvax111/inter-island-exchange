@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { aliasedTable, and, asc, eq, inArray } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, or } from 'drizzle-orm';
 import type { PartnerKind, Role } from '@iie/shared';
 import { Database, DB, Tx } from '../db/db';
 import { countries, lanes, partnerLanes, partnerMembers, roles, servicePartners, userRoles, users } from '../db/schema';
@@ -38,7 +38,7 @@ export class PartnersService {
       .select({ p: servicePartners, country: countries.isoAlpha2, countryName: countries.name })
       .from(servicePartners)
       .innerJoin(countries, eq(countries.id, servicePartners.countryId))
-      .orderBy(asc(servicePartners.kind), asc(servicePartners.name));
+      .orderBy(desc(servicePartners.active), asc(servicePartners.kind), asc(servicePartners.name));
     const ids = rows.map((r) => r.p.id);
     const origin = aliasedTable(countries, 'origin');
     const destination = aliasedTable(countries, 'destination');
@@ -67,6 +67,22 @@ export class PartnersService {
           .map((m) => ({ userId: m.userId, email: m.email, name: `${m.firstName} ${m.lastName}`, invitationAccepted: !!m.verified })),
       })),
     };
+  }
+
+  /** Public: names of the active partners serving a country (carriers on its lanes, brokers based there). */
+  async publicForCountry(code: string) {
+    const country = await this.country(code.toUpperCase());
+    const carriers = await this.db
+      .selectDistinct({ name: servicePartners.name })
+      .from(servicePartners)
+      .innerJoin(partnerLanes, and(eq(partnerLanes.partnerId, servicePartners.id), eq(partnerLanes.active, true)))
+      .innerJoin(lanes, eq(lanes.id, partnerLanes.laneId))
+      .where(and(eq(servicePartners.active, true), eq(servicePartners.kind, 'LOGISTICS'), or(eq(lanes.originCountryId, country.id), eq(lanes.destinationCountryId, country.id))));
+    const brokers = await this.db
+      .select({ name: servicePartners.name })
+      .from(servicePartners)
+      .where(and(eq(servicePartners.active, true), eq(servicePartners.kind, 'CUSTOMS_BROKER'), eq(servicePartners.countryId, country.id)));
+    return { logisticsPartners: carriers.map((c) => c.name).sort(), customsBrokers: brokers.map((b) => b.name).sort() };
   }
 
   async create(input: { kind: PartnerKind; name: string; countryCode: string; contactEmail: string; contactPhone: string; clearsCustoms: boolean }, meta: RequestMeta) {

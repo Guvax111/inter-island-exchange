@@ -61,3 +61,11 @@ export async function apiUpload<T = unknown>(path: string, file: File, fields: R
   if (!res.ok) throw new ApiError(res.status, data.error ?? { code: 'UPLOAD_FAILED', message: 'Upload failed. Try a smaller JPEG, PNG or WebP image.' });
   return data as T;
 }
+
+/** Multipart form (several files and fields) through the same proxy, with the CSRF header. */
+export async function apiForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`/api/v1${path}`, { method: 'POST', body: form, credentials: 'same-origin', headers: { 'x-csrf-token': csrfToken() } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error ?? { code: 'NETWORK_ERROR', message: 'Could not reach the server. Check your connection.' });
+  return data as T;
+}

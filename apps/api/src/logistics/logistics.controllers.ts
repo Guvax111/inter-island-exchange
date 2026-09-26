@@ -17,7 +17,7 @@ import {
 import { requestMeta } from '../common/request';
 import type { Principal } from '../rbac/principal';
 import { CurrentPrincipal } from '../auth/current-principal.decorator';
-import { RequirePermissions } from '../auth/decorators';
+import { Public, RequirePermissions } from '../auth/decorators';
 import { PartnersService } from './partners.service';
 import { ShipmentsService } from './shipments.service';
 
@@ -29,6 +29,19 @@ const PROOF_UPLOADS = FileFieldsInterceptor(
   ],
   { limits: { fileSize: 20 * 1024 * 1024, files: 2 } },
 );
+
+@ApiTags('countries')
+@Controller('countries')
+export class CountryPartnersController {
+  constructor(private readonly partners: PartnersService) {}
+
+  /** Public list of the logistics partners and customs brokers serving a country (names only). */
+  @Public()
+  @Get(':code/partners')
+  list(@Param('code') code: string) {
+    return this.partners.publicForCountry(code);
+  }
+}
 
 @ApiTags('seller')
 @Controller('me/sales')

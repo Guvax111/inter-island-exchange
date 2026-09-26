@@ -4,9 +4,10 @@ import path from 'node:path';
 import { ADMIN, EMAIL_DIR } from '../playwright.config';
 
 /**
- * The St. Lucia -> St. Vincent pilot, as far as Phase 2 goes:
- * seller signs up and is approved, lists diapers, IIE approves them, a buyer in St. Vincent finds them, checks out and
- * places the order (IIE-SLU-SVG-…); the seller and IIE see it. Payment arrives in Phase 4.
+ * The St. Lucia -> St. Vincent pilot, end to end: the seller signs up and is approved, lists diapers, IIE approves
+ * them; a buyer in St. Vincent finds them, checks out and pays on the sandbox page; the seller confirms and packs;
+ * IIE's logistics partner and customs broker (invited by IIE) move the parcel through customs and deliver it with
+ * proof of delivery; the buyer confirms receipt.
  */
 const run = Date.now().toString(36);
 const seller = { email: `seller-${run}@e2e.example`, password: 'castries-seller-password' };
@@ -18,7 +19,7 @@ async function linkFromEmail(to: string, kind: 'verify-email' | 'reset-password'
   await expect.poll(count, { timeout: 15_000 }).toBeGreaterThan(0);
   const file = readdirSync(EMAIL_DIR).filter((f) => f.includes(to)).sort().at(-1)!;
   const { text } = JSON.parse(readFileSync(path.join(EMAIL_DIR, file), 'utf8')) as { text: string };
-  const match = new RegExp(`(https?://[\\w.:-]+/${kind}\\?token=[\\w%-]+)`).exec(text);
+  const match = new RegExp(`(https?://[\\w.:-]+/${kind}\\?token=[\\w%-]+(?:&invite=1)?)`).exec(text);
   expect(match, `link in email to ${to}`).not.toBeNull();
   return new URL(match![1]!).pathname + new URL(match![1]!).search;
 }
@@ -190,4 +191,119 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   const payoutRow = adminPage.getByRole('row', { name: new RegExp(iieId) });
   await expect(payoutRow).toContainText('on hold');
   await expect(payoutRow).toContainText('EC$90.00');
+
+  // ---- IIE sets up the lane's logistics partner and the St. Vincent customs broker, and invites their staff
+  const csrf = (await adminPage.context().cookies()).find((c) => c.name === 'iie_csrf')!.value;
+  // Local runs reuse the database: retire partners left by earlier runs so this run's partners get the shipment.
+  const existing = (await (await adminPage.request.get('/api/v1/admin/partners')).json()) as { items: { id: string; active: boolean }[] };
+  for (const p of existing.items.filter((p) => p.active)) {
+    await adminPage.request.patch(`/api/v1/admin/partners/${p.id}`, { data: { active: false }, headers: { 'x-csrf-token': csrf } });
+  }
+  const carrierName = `Pilot Freight ${run}`;
+  const brokerName = `Kingstown Customs ${run}`;
+  const carrierStaff = { email: `driver-${run}@e2e.example`, password: 'carrier-staff-password' };
+  const brokerStaff = { email: `broker-${run}@e2e.example`, password: 'broker-staff-password' };
+  await adminPage.goto('/admin/logistics');
+  for (const [kind, name, country, phone] of [
+    ['LOGISTICS', carrierName, 'LC', '+17585550100'],
+    ['CUSTOMS_BROKER', brokerName, 'VC', '+17845550100'],
+  ] as const) {
+    await adminPage.getByLabel('Type').selectOption(kind);
+    await adminPage.getByLabel('Name', { exact: true }).fill(name);
+    await adminPage.getByLabel('Country (2-letter code)').fill(country);
+    await adminPage.getByLabel('Contact email').fill(`ops-${run}-${country.toLowerCase()}@e2e.example`);
+    await adminPage.getByLabel('Contact phone').fill(phone);
+    await adminPage.getByRole('button', { name: 'Add partner' }).click();
+    await expect(adminPage.getByRole('region', { name })).toBeVisible();
+  }
+  const carrierCard = adminPage.getByRole('region', { name: carrierName });
+  await carrierCard.getByRole('button', { name: 'Add lane' }).click(); // LC -> VC is the default
+  await expect(carrierCard.getByText('LC → VC')).toBeVisible();
+  for (const [card, staff, first] of [
+    [carrierCard, carrierStaff, 'Kerwin'],
+    [adminPage.getByRole('region', { name: brokerName }), brokerStaff, 'Andrea'],
+  ] as const) {
+    await card.getByLabel('First name').fill(first);
+    await card.getByLabel('Last name').fill('Tester');
+    await card.getByLabel('Email').fill(staff.email);
+    await card.getByRole('button', { name: 'Invite' }).click();
+    await expect(card.getByText('Invitation sent')).toBeVisible();
+  }
+  await shot(adminPage, 'p5-01-admin-logistics');
+
+  // Invited staff choose their password from the email and sign in.
+  const staffPage = async (staff: { email: string; password: string }) => {
+    const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
+    await page.goto(await linkFromEmail(staff.email, 'reset-password'));
+    await expect(page.getByText('Welcome to IIE: choose your password')).toBeVisible();
+    await page.getByLabel('New password').fill(staff.password);
+    await page.getByRole('button', { name: 'Save password' }).click();
+    await expect(page.getByText('Your account is ready')).toBeVisible();
+    await signIn(page, staff.email, staff.password, '/partner');
+    return page;
+  };
+  const carrierPage = await staffPage(carrierStaff);
+  const brokerPage = await staffPage(brokerStaff);
+
+  // ---- Seller packs the order
+  await sellerPage.goto(`/dashboard/seller/orders/${iieId}`);
+  await sellerPage.getByLabel('Notes for the driver').fill('Side gate, open 8am to 4pm');
+  await sellerPage.getByRole('button', { name: 'Ready for pickup' }).click();
+  await expect(sellerPage.getByText(/Packed and waiting for the logistics partner/)).toBeVisible();
+
+  // ---- Carrier collects and ships (on a phone)
+  await carrierPage.reload();
+  await carrierPage.getByRole('link', { name: new RegExp(iieId) }).click();
+  await expect(carrierPage.getByText('Side gate, open 8am to 4pm').first()).toBeVisible();
+  await expect(carrierPage.getByText('Upper Bay Street, Kingstown')).toBeVisible();
+  await shot(carrierPage, 'p5-02-partner-shipment-mobile');
+  await carrierPage.getByRole('button', { name: 'Schedule pickup' }).click();
+  await carrierPage.getByLabel('Weight measured at pickup (kg)').fill('3.6');
+  await carrierPage.getByRole('button', { name: 'Picked up' }).click();
+  await carrierPage.getByRole('button', { name: 'Export processing' }).click();
+  await carrierPage.getByRole('button', { name: 'In transit' }).click();
+  await carrierPage.getByLabel('Location (optional)').fill('Kingstown port');
+  await carrierPage.getByRole('button', { name: 'Arrived in destination' }).click();
+  await expect(carrierPage.getByText(/you handle transport and delivery/)).toBeVisible();
+  await expect(carrierPage.getByRole('button', { name: 'Customs processing started' })).toHaveCount(0);
+
+  // ---- Customs broker clears it, with the commercial invoice
+  await brokerPage.goto(`/partner/shipments/${iieId}/invoice`);
+  await expect(brokerPage.getByText('Commercial invoice and packing list')).toBeVisible();
+  await expect(brokerPage.getByText('CARICOM origin')).toBeVisible();
+  await shot(brokerPage, 'p5-03-commercial-invoice');
+  await brokerPage.goto(`/partner/shipments/${iieId}`);
+  await brokerPage.getByRole('button', { name: 'Customs processing started' }).click();
+  await brokerPage.getByLabel('Customs entry number (optional)').fill('SVG-C-2026-0042');
+  await brokerPage.getByLabel(/Duties and taxes assessed/).fill('21.60');
+  await brokerPage.getByRole('button', { name: 'Cleared customs' }).click();
+  await expect(brokerPage.getByText('Cleared customs', { exact: true }).first()).toBeVisible();
+
+  // ---- Carrier delivers with proof: name, time, photo and signature
+  await carrierPage.reload();
+  await carrierPage.getByRole('button', { name: 'Out for delivery' }).click();
+  await carrierPage.getByLabel('Received by').fill('Dwayne Tester');
+  await carrierPage.getByLabel('Photo (optional)').setInputFiles(path.join(__dirname, 'fixtures/diapers.jpg'));
+  const canvas = carrierPage.getByLabel('Recipient’s signature (optional)');
+  await canvas.scrollIntoViewIfNeeded();
+  const pad = (await canvas.boundingBox())!;
+  await carrierPage.mouse.move(pad.x + 20, pad.y + pad.height / 2);
+  await carrierPage.mouse.down();
+  for (let i = 1; i <= 10; i++) await carrierPage.mouse.move(pad.x + 20 + i * 25, pad.y + pad.height / 2 + (i % 2 ? -20 : 20));
+  await carrierPage.mouse.up();
+  await shot(carrierPage, 'p5-04-proof-of-delivery-mobile');
+  await carrierPage.getByRole('button', { name: 'Delivered', exact: true }).click();
+  await expect(carrierPage.getByText(/Received by Dwayne Tester on/)).toBeVisible();
+
+  // ---- Buyer sees the journey, customs' assessment and the proof, and confirms receipt
+  await buyerPage.goto(`/orders/${iieId}`);
+  await expect(buyerPage.getByText('Delivered: did everything arrive as expected?')).toBeVisible();
+  await expect(buyerPage.getByText('EC$21.60')).toBeVisible();
+  await expect(buyerPage.getByRole('img', { name: 'Delivery photo' })).toBeVisible();
+  await expect(buyerPage.getByRole('img', { name: 'Recipient’s signature' })).toBeVisible();
+  await shot(buyerPage, 'p5-05-delivered-mobile');
+  await buyerPage.getByRole('button', { name: 'Yes, I received my order' }).click();
+  await expect(buyerPage.getByText('Delivery confirmed', { exact: true }).first()).toBeVisible();
+  await sellerPage.reload();
+  await expect(sellerPage.getByText(/Delivery confirmed. Your payout is released after the review period/)).toBeVisible();
 });

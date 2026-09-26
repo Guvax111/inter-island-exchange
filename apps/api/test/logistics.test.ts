@@ -325,3 +325,33 @@ describe('partner administration', () => {
     expect(err2).toMatch(/append-only/);
   });
 });
+
+describe('delivery time entered to the minute', () => {
+  it('accepts a delivery in the same minute the parcel was marked ready', async () => {
+    const { iieId } = await confirmedOrder();
+    await toOutForDelivery(iieId);
+    const [s] = await ctx.db.select().from(shipments).innerJoin(transactions, eq(transactions.id, shipments.transactionId)).where(eq(transactions.iieId, iieId));
+    const minute = new Date(Math.floor(s!.shipments.createdAt.getTime() / 60_000) * 60_000);
+    await carrier.staff.agent
+      .post(`/api/v1/partner/shipments/${iieId}/delivery`)
+      .set('x-csrf-token', carrier.staff.csrf)
+      .field('recipientName', 'Dwayne Tester')
+      .field('deliveredAt', minute.toISOString())
+      .expect(200);
+  });
+});
+
+describe('public partner list', () => {
+  it('names the active partners serving a country and nothing else', async () => {
+    const vc = (await http().get('/api/v1/countries/VC/partners')).body;
+    expect(vc.logisticsPartners).toContain('Test Island Freight');
+    expect(vc.customsBrokers).toContain('Kingstown Customs Services');
+    expect(JSON.stringify(vc)).not.toMatch(/@|\+1/);
+    const lc = (await http().get('/api/v1/countries/LC/partners')).body;
+    expect(lc.logisticsPartners).toContain('Test Island Freight');
+    expect(lc.customsBrokers).not.toContain('Kingstown Customs Services');
+    await admin.patch(`/admin/partners/${carrier.id}`, { active: false }).expect(204);
+    expect((await http().get('/api/v1/countries/VC/partners')).body.logisticsPartners).not.toContain('Test Island Freight');
+    await admin.patch(`/admin/partners/${carrier.id}`, { active: true }).expect(204);
+  });
+});

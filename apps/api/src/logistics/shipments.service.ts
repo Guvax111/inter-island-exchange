@@ -250,7 +250,7 @@ export class ShipmentsService {
     step: ShipmentStep;
     note?: string;
     location?: string;
-    pickupAt?: Date;
+    pickupAt?: string;
     actualWeightGrams?: number;
     trackingReference?: string;
     customsEntryNumber?: string;
@@ -269,7 +269,7 @@ export class ShipmentsService {
 
     const set: Partial<typeof shipments.$inferInsert> = { updatedAt: new Date() };
     if (input.trackingReference) set.trackingReference = input.trackingReference;
-    if (input.step === 'SCHEDULE_PICKUP') set.pickupScheduledFor = input.pickupAt!;
+    if (input.step === 'SCHEDULE_PICKUP') set.pickupScheduledFor = new Date(input.pickupAt!);
     if (input.step === 'PICKED_UP') {
       set.pickedUpAt = new Date();
       set.actualWeightGrams = input.actualWeightGrams!;
@@ -304,14 +304,16 @@ export class ShipmentsService {
   }
 
   /** Proof of delivery: recipient name and time required; photo and signature optional. Starts the 3-day confirmation period. */
-  async deliver(principal: Principal, iieId: string, input: { recipientName: string; deliveredAt: Date; note?: string }, files: { photo?: Upload; signature?: Upload }, meta: RequestMeta) {
+  async deliver(principal: Principal, iieId: string, body: { recipientName: string; deliveredAt: string; note?: string }, files: { photo?: Upload; signature?: Upload }, meta: RequestMeta) {
+    const input = { ...body, deliveredAt: new Date(body.deliveredAt) };
     const { t, s, parties, partnerFor } = await this.loadForPartner(principal, iieId);
     if (!parties.includes('LOGISTICS') || !principal.can('shipment.update.assigned')) throw Errors.forbidden('Only the logistics partner can record delivery');
     if (t.status !== 'OUT_FOR_DELIVERY') throw Errors.conflict('INVALID_TRANSITION', 'Only a shipment out for delivery can be marked delivered');
     const now = Date.now();
     if (input.deliveredAt.getTime() > now + 5 * 60_000) throw Errors.badRequest('DELIVERY_IN_FUTURE', 'The delivery time cannot be in the future');
     // Steps may be recorded after the fact, so the only firm lower bound is when the parcel was ready for pickup.
-    if (input.deliveredAt < s.createdAt) throw Errors.badRequest('DELIVERY_BEFORE_PICKUP', 'The delivery time is before the parcel was ready for pickup');
+    // Delivery times are entered to the minute, so allow the seconds that rounding drops.
+    if (input.deliveredAt.getTime() < s.createdAt.getTime() - 60_000) throw Errors.badRequest('DELIVERY_BEFORE_PICKUP', 'The delivery time is before the parcel was ready for pickup');
     const confirmDue = new Date(now + DELIVERY_CONFIRMATION_DAYS * 24 * 3600_000);
 
     await this.db.transaction(async (tx) => {

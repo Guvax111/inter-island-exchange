@@ -162,6 +162,10 @@ export interface OrderDetail {
   canCancel: boolean;
   canPay: boolean;
   sellerConfirmDueAt: string | null;
+  canMarkReady: boolean;
+  canConfirmDelivery: boolean;
+  deliveryConfirmDueAt: string | null;
+  shipment: ShipmentView | null;
   seller: { name: string; slug: string };
   buyer: { firstName: string; lastName?: string; email?: string };
   deliveryAddress: Record<string, string | null>;
@@ -192,4 +196,63 @@ export interface MoneyTrail {
   payments: { provider: string; providerIntentId: string; status: string; amount: Money; createdAt: string }[];
   refunds: { status: string; amount: Money; reason: string; requestedBy: string; providerRefundId: string | null; createdAt: string }[];
   events: { type: string; amount: Money | null; at: string }[];
+}
+
+export interface ShipmentEvent {
+  step: string;
+  label: string;
+  location: string | null;
+  note: string | null;
+  at: string;
+  actorType?: string;
+}
+
+export interface ShipmentView {
+  logisticsPartner: { name: string; phone: string; clearsCustoms: boolean } | null;
+  customsBroker: { name: string; phone: string } | null;
+  trackingReference: string | null;
+  pickupScheduledFor: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  customs: { entryNumber: string | null; dutiesAssessed: Money | null; payableOnArrival: boolean };
+  weights?: { declaredGrams: number; parcelGrams: number; actualGrams: number | null; flagged?: boolean };
+  events: ShipmentEvent[];
+  proofOfDelivery: { recipientName: string; deliveredAt: string; note?: string | null; photoUrl: string | null; signatureUrl: string | null } | null;
+}
+
+export type ShipmentStep =
+  | 'SCHEDULE_PICKUP'
+  | 'PICKED_UP'
+  | 'EXPORT_PROCESSING'
+  | 'IN_TRANSIT'
+  | 'ARRIVED_DESTINATION'
+  | 'CUSTOMS_PROCESSING'
+  | 'CUSTOMS_CLEARED'
+  | 'CUSTOMS_HOLD'
+  | 'CUSTOMS_RELEASED'
+  | 'OUT_FOR_DELIVERY';
+
+export interface PartnerShipmentSummary {
+  iieId: string;
+  status: string;
+  statusLabel: string;
+  route: string;
+  pickupCity: string | null;
+  deliveryCity: string | null;
+  open: boolean;
+  actionNeeded: boolean;
+  createdAt: string;
+}
+
+export interface PartnerShipmentDetail {
+  iieId: string;
+  status: string;
+  statusLabel: string;
+  yourRoles: ('LOGISTICS' | 'CUSTOMS')[];
+  nextSteps: ShipmentStep[];
+  canDeliver: boolean;
+  pickup: { address: Record<string, string | null>; contact: { name: string; phone: string | null }; notes: string };
+  delivery: { address: Record<string, string | null>; contact: { name: string; phone: string | null } };
+  items: { sku: string; title: string; variantName: string; quantity: number; unitWeightGrams: number }[];
+  shipment: ShipmentView;
 }

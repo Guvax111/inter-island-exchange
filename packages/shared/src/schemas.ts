@@ -376,8 +376,8 @@ export const shipmentStepSchema = z
     step: z.enum(SHIPMENT_STEPS),
     note: noteSchema,
     location: locationSchema,
-    /** SCHEDULE_PICKUP */
-    pickupAt: z.coerce.date().optional(),
+    /** SCHEDULE_PICKUP: ISO 8601 date-time */
+    pickupAt: z.iso.datetime({ offset: true }).optional(),
     /** PICKED_UP: weight measured at pickup */
     actualWeightGrams: gramsSchema.optional(),
     /** Partner's own reference (waybill, manifest) */
@@ -398,7 +398,8 @@ export const shipmentStepSchema = z
 /** Proof of delivery. Recipient name and time are required; photo and signature are optional uploads. */
 export const deliveryProofSchema = z.object({
   recipientName: z.string().trim().min(2).max(120),
-  deliveredAt: z.coerce.date(),
+  /** ISO 8601 date-time */
+  deliveredAt: z.iso.datetime({ offset: true }),
   note: noteSchema,
 });
 

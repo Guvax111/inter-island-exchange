@@ -7,9 +7,11 @@ import { useState } from 'react';
 import { FormError } from '@/components/forms/field';
 import { HoursCountdown } from '@/components/orders/countdown';
 import { CostBreakdown } from '@/components/orders/cost-breakdown';
+import { ShipmentPanel } from '@/components/orders/shipment-panel';
 import { OrderTimeline } from '@/components/orders/order-timeline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api, errorMessage } from '@/lib/api';
 import type { OrderDetail } from '@/lib/types';
@@ -19,10 +21,12 @@ export default function SellerOrderPage() {
   const qc = useQueryClient();
   const { data: order, isLoading } = useQuery({ queryKey: ['sale', iieId], queryFn: () => api<OrderDetail>(`/me/sales/${iieId}`) });
   const [declining, setDeclining] = useState(false);
+  const [parcelKg, setParcelKg] = useState('');
+  const [pickupNotes, setPickupNotes] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function act(path: 'confirm' | 'decline', body: object = {}) {
+  async function act(path: 'confirm' | 'decline' | 'ready', body: object = {}) {
     setError(null);
     setBusy(true);
     try {
@@ -42,7 +46,20 @@ export default function SellerOrderPage() {
     PAYMENT_FAILED: 'The buyer’s payment did not go through; they can try again. Do not prepare or ship yet.',
     PAYMENT_PROCESSING: 'The buyer’s payment is being processed. Do not prepare or ship yet.',
     AWAITING_SELLER_CONFIRMATION: 'The buyer has paid. The payment provider holds the money until the order is complete. Confirm you can supply every item, or decline so the buyer is refunded.',
-    SELLER_CONFIRMED: 'You confirmed this order. Prepare it for pickup; IIE will arrange the shipment with the logistics partner.',
+    SELLER_CONFIRMED: 'You confirmed this order. Pack it, then mark it ready for pickup so the logistics partner can collect it.',
+    PREPARING_SHIPMENT: 'Packed and waiting for the logistics partner to schedule the pickup.',
+    PICKUP_SCHEDULED: 'The logistics partner will collect the parcel at the time shown below. Have it ready.',
+    PICKED_UP: 'Collected. Nothing more to do; you can follow the shipment below.',
+    EXPORT_PROCESSING: 'On its way. Nothing more to do.',
+    IN_TRANSIT: 'On its way. Nothing more to do.',
+    ARRIVED_DESTINATION: 'Arrived in the destination country. Nothing more to do.',
+    CUSTOMS_PROCESSING: 'At customs. IIE may contact you if customs asks for documents.',
+    CUSTOMS_HOLD: 'Held by customs. IIE may contact you for documents.',
+    CUSTOMS_CLEARED: 'Cleared customs; delivery is next.',
+    OUT_FOR_DELIVERY: 'Out for delivery.',
+    DELIVERED: 'Delivered. The buyer has 3 days to confirm or report a problem; your payout follows after the review period.',
+    DELIVERY_CONFIRMED: 'Delivery confirmed. Your payout is released after the review period.',
+    DISPUTED: 'The buyer reported a problem. IIE is looking into it and may contact you. Your payout is on hold until it is resolved.',
     CANCELLED: 'This order was cancelled. Nothing to do.',
     REFUNDED: 'The buyer was refunded in full. Nothing to do; any stock was put back.',
     COMPLIANCE_HOLD: 'IIE is reviewing this order. Do not prepare or ship until IIE tells you.',
@@ -59,6 +76,33 @@ export default function SellerOrderPage() {
       <div className="rounded-lg border-l-4 border-ocean-600 bg-ocean-50 p-4" role="status">
         <p className="font-semibold">{order.statusLabel}</p>
         <p className="text-sm">{next[order.status] ?? 'IIE will tell you what to do next.'}</p>
+        {order.canMarkReady && (
+          <form
+            className="mt-3 grid max-w-2xl gap-3 sm:grid-cols-[160px_1fr_auto] sm:items-end"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const grams = parcelKg ? Math.round(Number(parcelKg) * 1000) : undefined;
+              void act('ready', { ...(grams ? { parcelWeightGrams: grams } : {}), ...(pickupNotes ? { pickupNotes } : {}) });
+            }}
+          >
+            <div className="space-y-1">
+              <label htmlFor="parcel-kg" className="text-sm font-medium">
+                Packed weight (kg)
+              </label>
+              <Input id="parcel-kg" inputMode="decimal" placeholder="optional" value={parcelKg} onChange={(e) => setParcelKg(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="pickup-notes" className="text-sm font-medium">
+                Notes for the driver
+              </label>
+              <Input id="pickup-notes" placeholder="e.g. side gate, open 8am–4pm" maxLength={500} value={pickupNotes} onChange={(e) => setPickupNotes(e.target.value)} />
+            </div>
+            <Button type="submit" disabled={busy}>
+              Ready for pickup
+            </Button>
+            <FormError message={error} />
+          </form>
+        )}
         {order.status === 'AWAITING_SELLER_CONFIRMATION' && (
           <div className="mt-3 space-y-3">
             {order.sellerConfirmDueAt && (
@@ -120,6 +164,16 @@ export default function SellerOrderPage() {
               </ul>
             </CardContent>
           </Card>
+          {order.shipment && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Shipment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ShipmentPanel shipment={order.shipment} showWeights />
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Progress</CardTitle>

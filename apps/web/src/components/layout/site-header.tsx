@@ -28,6 +28,7 @@ export function SiteHeader() {
   });
   const ADMIN_PERMISSIONS = ['user.read.any', 'country.manage', 'seller.review', 'product.review', 'transaction.read.any'];
   const isAdmin = ADMIN_PERMISSIONS.some((p) => me?.permissions.includes(p));
+  const isPartner = !!me?.permissions.includes('shipment.read.assigned');
   const dashboard = me?.roles.includes('seller') ? '/dashboard/seller' : me?.roles.includes('buyer') ? '/dashboard/buyer' : null;
 
   async function logout() {
@@ -61,6 +62,11 @@ export function SiteHeader() {
       {dashboard && (
         <Button asChild variant="ghost" size="sm">
           <Link href={dashboard}>Dashboard</Link>
+        </Button>
+      )}
+      {isPartner && (
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/partner">Partner portal</Link>
         </Button>
       )}
       {isAdmin && (

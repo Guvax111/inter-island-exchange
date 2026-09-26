@@ -27,9 +27,10 @@ export default async function CountryPage({ params }: Props) {
   if (!country) notFound();
   const tagline = typeof country.info.tagline === 'string' ? country.info.tagline : null;
   const lanes = country.lanes ?? [];
-  const [sellers, latest] = await Promise.all([
+  const [sellers, latest, partners] = await Promise.all([
     serverGet<{ items: SellerCard[] }>(`/sellers?country=${country.code}`, 60),
     serverGet<SearchResult>(`/products?sellerCountry=${country.code}&sort=newest&pageSize=8`, 60),
+    serverGet<{ logisticsPartners: string[]; customsBrokers: string[] }>(`/countries/${country.code}/partners`, 300),
   ]);
 
   return (
@@ -96,7 +97,20 @@ export default async function CountryPage({ params }: Props) {
         </div>
         <div className="rounded-lg border p-6 md:col-span-2">
           <h2 className="text-lg font-semibold">Shipping and logistics partners</h2>
-          <p className="mt-3 text-muted-foreground">Shipping options and logistics partners for {country.name} will be listed here.</p>
+          {partners && (partners.logisticsPartners.length || partners.customsBrokers.length) ? (
+            <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="font-medium">Logistics partners</dt>
+                <dd className="text-muted-foreground">{partners.logisticsPartners.join(', ') || 'To be announced'}</dd>
+              </div>
+              <div>
+                <dt className="font-medium">Customs brokers in {country.name}</dt>
+                <dd className="text-muted-foreground">{partners.customsBrokers.join(', ') || 'To be announced'}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="mt-3 text-muted-foreground">IIE is selecting its logistics partners for {country.name}. They will be listed here once announced.</p>
+          )}
         </div>
       </section>
     </>

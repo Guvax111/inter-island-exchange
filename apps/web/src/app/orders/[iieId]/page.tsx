@@ -10,8 +10,10 @@ import { CostBreakdown } from '@/components/orders/cost-breakdown';
 import { OrderTimeline } from '@/components/orders/order-timeline';
 import { HoursCountdown } from '@/components/orders/countdown';
 import { PaymentCountdown } from '@/components/orders/payment-countdown';
+import { ShipmentPanel } from '@/components/orders/shipment-panel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import { api, errorMessage } from '@/lib/api';
 import type { OrderDetail } from '@/lib/types';
 
@@ -81,6 +83,7 @@ function Order() {
       </div>
 
       <PaymentPanel order={order} returned={returned} paying={paying} onPay={pay} onCancel={cancel} error={error} />
+      <DeliveryPanel order={order} onChange={(o) => qc.setQueryData(['order', iieId], o)} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
@@ -92,6 +95,16 @@ function Order() {
               <OrderTimeline order={order} />
             </CardContent>
           </Card>
+          {order.shipment && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Shipment tracking</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ShipmentPanel shipment={order.shipment} />
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Items</CardTitle>
@@ -223,6 +236,106 @@ function PaymentPanel({ order, returned, paying, onPay, onCancel, error }: { ord
       return (
         <Notice tone="info" title="Cancelled">
           <p className="mt-1 text-sm">{order.timeline.at(-1)?.reason ?? 'This order was cancelled.'} You were not charged.</p>
+        </Notice>
+      );
+    default:
+      return null;
+  }
+}
+
+/** After delivery: confirm receipt or report a problem within the confirmation period. */
+function DeliveryPanel({ order, onChange }: { order: OrderDetail; onChange: (o: OrderDetail) => void }) {
+  const [reporting, setReporting] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function act(path: 'confirm-delivery' | 'report-problem', body: object = {}) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/me/orders/${order.iieId}/${path}`, { method: 'POST', body });
+      onChange(await api<OrderDetail>(`/me/orders/${order.iieId}`));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  switch (order.status) {
+    case 'PREPARING_SHIPMENT':
+    case 'PICKUP_SCHEDULED':
+    case 'PICKED_UP':
+    case 'EXPORT_PROCESSING':
+    case 'IN_TRANSIT':
+    case 'ARRIVED_DESTINATION':
+    case 'CUSTOMS_PROCESSING':
+    case 'CUSTOMS_CLEARED':
+    case 'OUT_FOR_DELIVERY':
+      return (
+        <Notice tone="info" title={order.statusLabel}>
+          <p className="mt-1 text-sm">
+            Your order is on its way. Duties and taxes are paid on arrival
+            {order.shipment?.customs.dutiesAssessed ? `: customs assessed ${order.shipment.customs.dutiesAssessed.formatted}` : ` (estimated ${order.amounts.dutiesEstimate.formatted})`}.
+          </p>
+        </Notice>
+      );
+    case 'CUSTOMS_HOLD':
+      return (
+        <Notice tone="wait" title="Held by customs">
+          <p className="mt-1 text-sm">{order.timeline.at(-1)?.reason ?? 'Customs is holding your parcel.'} The customs broker is dealing with it; you do not need to do anything unless we contact you.</p>
+        </Notice>
+      );
+    case 'DELIVERED':
+      return (
+        <Notice tone="good" title="Delivered: did everything arrive as expected?">
+          <p className="mt-1 text-sm">
+            Please confirm, or tell us about a problem
+            {order.deliveryConfirmDueAt && <> (<HoursCountdown dueAt={order.deliveryConfirmDueAt} />)</>}. If we do not hear from you by then, the delivery is confirmed automatically.
+          </p>
+          {!reporting ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" disabled={busy} onClick={() => act('confirm-delivery')}>
+                Yes, I received my order
+              </Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => setReporting(true)}>
+                Report a problem
+              </Button>
+            </div>
+          ) : (
+            <form
+              className="mt-3 max-w-lg space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act('report-problem', { reason });
+              }}
+            >
+              <label htmlFor="problem" className="text-sm font-medium">
+                What went wrong? (missing or damaged items, wrong product…)
+              </label>
+              <Textarea id="problem" value={reason} onChange={(e) => setReason(e.target.value)} required minLength={10} maxLength={1000} />
+              <div className="flex gap-2">
+                <Button size="sm" type="submit" disabled={busy || reason.trim().length < 10}>
+                  Send report
+                </Button>
+                <Button size="sm" variant="ghost" type="button" onClick={() => setReporting(false)}>
+                  Back
+                </Button>
+              </div>
+            </form>
+          )}
+          <FormError message={error} />
+        </Notice>
+      );
+    case 'DELIVERY_CONFIRMED':
+      return (
+        <Notice tone="good" title="Delivery confirmed">
+          <p className="mt-1 text-sm">Thank you for shopping with IIE.</p>
+        </Notice>
+      );
+    case 'DISPUTED':
+      return (
+        <Notice tone="wait" title="Problem reported">
+          <p className="mt-1 text-sm">IIE is looking into your report and will contact you. Your payment stays held by the payment provider until it is resolved.</p>
         </Notice>
       );
     default:
