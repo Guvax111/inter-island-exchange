@@ -8,6 +8,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   smallint,
@@ -376,6 +377,8 @@ export const sellerStorefronts = pgTable('seller_storefronts', {
   shippingOrigin: varchar('shipping_origin', { length: 100 }).notNull().default(''),
   returnPolicy: text('return_policy').notNull().default(''),
   storePolicies: text('store_policies').notNull().default(''),
+  /** Seller's choice of who pays the IIE fee; null = platform default (fee_rules). */
+  feePayer: varchar('fee_payer', { length: 10 }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -544,4 +547,228 @@ export const savedSellers = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.sellerProfileId] })],
+);
+
+// ---------------------------------------------------------------- Phase 3: checkout and transactions
+
+/** Shipping price bands per trade lane: the cheapest active band whose max weight covers the parcel applies. */
+export const laneShippingRates = pgTable(
+  'lane_shipping_rates',
+  {
+    id: id(),
+    laneId: uuid('lane_id').notNull().references(() => lanes.id),
+    serviceName: varchar('service_name', { length: 80 }).notNull(),
+    maxWeightGrams: integer('max_weight_grams').notNull(),
+    priceMinor: bigint('price_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    /** True until the logistics partner's real rates are entered. Shown to administrators. */
+    isPlaceholder: boolean('is_placeholder').notNull().default(false),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('lane_shipping_rates_price_chk', sql`${t.priceMinor} >= 0`),
+    check('lane_shipping_rates_weight_chk', sql`${t.maxWeightGrams} > 0`),
+    index('lane_shipping_rates_lane_idx').on(t.laneId, t.maxWeightGrams),
+  ],
+);
+
+/** IIE platform fee. One global rule today (lane_id null); lane-specific rules can be added later. */
+export const feeRules = pgTable(
+  'fee_rules',
+  {
+    id: id(),
+    laneId: uuid('lane_id').references(() => lanes.id),
+    percentBps: integer('percent_bps').notNull(),
+    defaultPayer: varchar('default_payer', { length: 10 }).notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('fee_rules_lane_uq').on(t.laneId).nullsNotDistinct(),
+    check('fee_rules_bps_chk', sql`${t.percentBps} between 0 and 10000`),
+    check('fee_rules_payer_chk', inList('default_payer', ['BUYER', 'SELLER'])),
+  ],
+);
+
+/**
+ * Duty and tax ESTIMATES by destination and HS prefix. Shown to buyers as estimates; actual charges are set
+ * by customs on arrival. Duty = value x rate (CARICOM-origin goods usually differ); VAT applies to value + duty.
+ */
+export const dutyEstimates = pgTable(
+  'duty_estimates',
+  {
+    id: id(),
+    destinationCountryId: uuid('destination_country_id').notNull().references(() => countries.id),
+    hsPrefix: varchar('hs_prefix', { length: 10 }).notNull().default(''),
+    caricomOriginDutyBps: integer('caricom_origin_duty_bps').notNull(),
+    otherOriginDutyBps: integer('other_origin_duty_bps').notNull(),
+    vatBps: integer('vat_bps').notNull(),
+    notes: text('notes').notNull().default(''),
+    isPlaceholder: boolean('is_placeholder').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique('duty_estimates_dest_prefix_uq').on(t.destinationCountryId, t.hsPrefix)],
+);
+
+/** A priced checkout for one seller, frozen for QUOTE_VALID_MINUTES. Orders are created only from quotes. */
+export const quotes = pgTable(
+  'quotes',
+  {
+    id: id(),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    addressId: uuid('address_id').notNull().references(() => addresses.id),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    /** Frozen lines and every amount; see CheckoutService.QuoteSnapshot. */
+    snapshot: jsonb('snapshot').notNull(),
+    totalMinor: bigint('total_minor', { mode: 'bigint' }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('quotes_buyer_idx').on(t.buyerUserId, t.createdAt)],
+);
+
+export const orders = pgTable('orders', {
+  id: id(),
+  buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+  sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+  quoteId: uuid('quote_id').notNull().unique().references(() => quotes.id),
+  /** Delivery address as it was when the order was placed. */
+  deliveryAddress: jsonb('delivery_address').notNull(),
+  createdAt: createdAt(),
+});
+
+/** Price and product snapshot per line. Never read product tables to price an existing order. */
+export const orderItems = pgTable(
+  'order_items',
+  {
+    id: id(),
+    orderId: uuid('order_id').notNull().references(() => orders.id),
+    variantId: uuid('variant_id').notNull().references(() => productVariants.id),
+    productId: uuid('product_id').notNull().references(() => products.id),
+    sku: varchar('sku', { length: 64 }).notNull(),
+    title: varchar('title', { length: 150 }).notNull(),
+    variantName: varchar('variant_name', { length: 100 }).notNull(),
+    hsCode: varchar('hs_code', { length: 10 }),
+    countryOfOrigin: char('country_of_origin', { length: 2 }).notNull(),
+    unitWeightGrams: integer('unit_weight_grams').notNull(),
+    unitPriceMinor: bigint('unit_price_minor', { mode: 'bigint' }).notNull(),
+    quantity: integer('quantity').notNull(),
+    lineTotalMinor: bigint('line_total_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+  },
+  (t) => [index('order_items_order_idx').on(t.orderId), check('order_items_quantity_chk', sql`${t.quantity} > 0`)],
+);
+
+/**
+ * The central transaction record: one per order, one IIE ID, every sub-status and every amount (minor units,
+ * frozen at order time). Status changes only through TransactionEngine.transition().
+ */
+export const transactions = pgTable(
+  'transactions',
+  {
+    id: id(),
+    iieId: varchar('iie_id', { length: 40 }).notNull().unique(),
+    orderId: uuid('order_id').notNull().unique().references(() => orders.id),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    originCountryId: uuid('origin_country_id').notNull().references(() => countries.id),
+    destinationCountryId: uuid('destination_country_id').notNull().references(() => countries.id),
+    status: varchar('status', { length: 40 }).notNull(),
+    /** Incremented on every transition; guards against lost updates. */
+    version: integer('version').notNull().default(0),
+    /** State interrupted by a hold (CUSTOMS_HOLD, COMPLIANCE_HOLD, DISPUTED), to return to afterwards. */
+    heldFromStatus: varchar('held_from_status', { length: 40 }),
+    paymentStatus: varchar('payment_status', { length: 30 }).notNull().default('NOT_STARTED'),
+    shipmentStatus: varchar('shipment_status', { length: 30 }).notNull().default('NOT_STARTED'),
+    customsStatus: varchar('customs_status', { length: 30 }).notNull().default('NOT_STARTED'),
+    complianceStatus: varchar('compliance_status', { length: 30 }).notNull().default('NOT_CHECKED'),
+    disputeStatus: varchar('dispute_status', { length: 30 }).notNull().default('NONE'),
+    payoutStatus: varchar('payout_status', { length: 30 }).notNull().default('NOT_STARTED'),
+    // Currency: the pilot lane is XCD -> XCD, so the exchange rate is 1. Rates are stored so they are never recomputed.
+    transactionCurrency: char('transaction_currency', { length: 3 }).notNull().references(() => currencies.code),
+    buyerCurrency: char('buyer_currency', { length: 3 }).notNull().references(() => currencies.code),
+    payoutCurrency: char('payout_currency', { length: 3 }).notNull().references(() => currencies.code),
+    fxRate: numeric('fx_rate', { precision: 18, scale: 8 }).notNull().default('1'),
+    fxSource: varchar('fx_source', { length: 40 }).notNull().default('SAME_CURRENCY'),
+    fxRecordedAt: timestamp('fx_recorded_at', { withTimezone: true }).notNull().defaultNow(),
+    subtotalMinor: bigint('subtotal_minor', { mode: 'bigint' }).notNull(),
+    shippingMinor: bigint('shipping_minor', { mode: 'bigint' }).notNull(),
+    platformFeeMinor: bigint('platform_fee_minor', { mode: 'bigint' }).notNull(),
+    platformFeeBps: integer('platform_fee_bps').notNull(),
+    feePayer: varchar('fee_payer', { length: 10 }).notNull(),
+    otherFeesMinor: bigint('other_fees_minor', { mode: 'bigint' }).notNull().default(sql`0`),
+    /** Estimated duties and taxes (not collected by IIE; payable on arrival). */
+    dutiesEstimateMinor: bigint('duties_estimate_minor', { mode: 'bigint' }).notNull(),
+    dutiesCollected: boolean('duties_collected').notNull().default(false),
+    /** What the buyer pays IIE's payment partner. */
+    totalMinor: bigint('total_minor', { mode: 'bigint' }).notNull(),
+    /** What the seller will receive once the transaction completes. */
+    sellerPayoutMinor: bigint('seller_payout_minor', { mode: 'bigint' }).notNull(),
+    paymentDueAt: timestamp('payment_due_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('transactions_fee_payer_chk', inList('fee_payer', ['BUYER', 'SELLER'])),
+    index('transactions_status_idx').on(t.status),
+    index('transactions_buyer_idx').on(t.buyerUserId, t.createdAt),
+    index('transactions_seller_idx').on(t.sellerProfileId, t.createdAt),
+    index('transactions_payment_due_idx').on(t.paymentDueAt).where(sql`status = 'AWAITING_PAYMENT'`),
+  ],
+);
+
+/** Append-only log of every state change (trigger in migration 0005). */
+export const transactionEvents = pgTable(
+  'transaction_events',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    fromStatus: varchar('from_status', { length: 40 }),
+    toStatus: varchar('to_status', { length: 40 }).notNull(),
+    actorType: varchar('actor_type', { length: 20 }).notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    reason: text('reason'),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index('transaction_events_tx_idx').on(t.transactionId, t.id)],
+);
+
+/** Stock held for an unpaid order. Released on cancellation or expiry; consumed when payment is confirmed (Phase 4). */
+export const inventoryReservations = pgTable(
+  'inventory_reservations',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    variantId: uuid('variant_id').notNull().references(() => productVariants.id),
+    quantity: integer('quantity').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('inventory_reservations_tx_idx').on(t.transactionId), check('inventory_reservations_qty_chk', sql`${t.quantity} > 0`)],
+);
+
+/** In-app notifications (the bell). Email copies go through the outbox. */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: id(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    type: varchar('type', { length: 60 }).notNull(),
+    title: varchar('title', { length: 200 }).notNull(),
+    body: text('body').notNull(),
+    link: varchar('link', { length: 300 }),
+    transactionId: uuid('transaction_id').references(() => transactions.id),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('notifications_user_idx').on(t.userId, t.createdAt)],
 );

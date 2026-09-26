@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, MAX_CART_QUANTITY, PARTY_TYPES, PRODUCT_STATUSES } from './statuses';
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, FEE_PAYERS, MAX_CART_QUANTITY, PARTY_TYPES, PRODUCT_STATUSES, TRANSACTION_STATUSES } from './statuses';
 import { ROLES } from './rbac';
 
 export const PASSWORD_MIN_LENGTH = 12;
@@ -154,6 +154,8 @@ export const storefrontUpdateSchema = z
     shippingOrigin: z.string().trim().max(100),
     returnPolicy: z.string().trim().max(4000),
     storePolicies: z.string().trim().max(4000),
+    /** Who pays the IIE fee on this store's orders; null means the platform default. */
+    feePayer: z.enum(FEE_PAYERS).nullable(),
   })
   .partial();
 export type StorefrontUpdateInput = z.infer<typeof storefrontUpdateSchema>;
@@ -253,3 +255,54 @@ export const cartAddSchema = z.object({ variantId: z.uuid(), quantity: z.number(
 export const cartUpdateSchema = z.object({ quantity: z.number().int().min(1).max(MAX_CART_QUANTITY) });
 
 export const addressCreateSchema = addressSchema.extend({ label: optionalText(50), makeDefault: z.boolean().default(false) });
+
+// ------------------------------------------------------------------ Phase 3: checkout and transactions
+
+/** A percentage typed as a decimal, e.g. "5" or "16.5". Stored as basis points (5% = 500). */
+export const percentInputSchema = z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, 'Enter a percentage like 5 or 16.5');
+
+export const checkoutQuoteSchema = z.object({ sellerSlug: slugSchema, addressId: z.uuid() });
+export const placeOrderSchema = z.object({ quoteId: z.uuid() });
+export const cancelOrderSchema = z.object({ reason: optionalText(500) });
+
+export const shippingRateSchema = z.object({
+  origin: countryCodeSchema,
+  destination: countryCodeSchema,
+  serviceName: z.string().trim().min(2).max(80),
+  maxWeightGrams: z.number().int().min(1).max(1_000_000),
+  price: priceInputSchema,
+  isPlaceholder: z.boolean().default(false),
+  active: z.boolean().default(true),
+});
+export const shippingRateUpdateSchema = z
+  .object({ serviceName: z.string().trim().min(2).max(80), maxWeightGrams: z.number().int().min(1).max(1_000_000), price: priceInputSchema, isPlaceholder: z.boolean(), active: z.boolean() })
+  .partial();
+
+export const feeRuleUpdateSchema = z.object({ percent: percentInputSchema, defaultPayer: z.enum(FEE_PAYERS) }).partial();
+
+export const dutyEstimateSchema = z.object({
+  destination: countryCodeSchema,
+  /** Leading HS digits this estimate covers; empty covers every product. The longest match wins. */
+  hsPrefix: z.string().trim().regex(/^\d{0,10}$/, 'Digits only').default(''),
+  caricomOriginDutyPercent: percentInputSchema,
+  otherOriginDutyPercent: percentInputSchema,
+  vatPercent: percentInputSchema,
+  notes: z.string().trim().max(500).default(''),
+  isPlaceholder: z.boolean().default(true),
+});
+export const dutyEstimateUpdateSchema = z
+  .object({
+    caricomOriginDutyPercent: percentInputSchema,
+    otherOriginDutyPercent: percentInputSchema,
+    vatPercent: percentInputSchema,
+    notes: z.string().trim().max(500),
+    isPlaceholder: z.boolean(),
+  })
+  .partial();
+
+export const adminTransactionQuerySchema = z.object({
+  status: z.enum(TRANSACTION_STATUSES).optional(),
+  q: z.string().trim().max(40).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});

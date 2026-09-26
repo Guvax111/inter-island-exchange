@@ -68,9 +68,10 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur">
       <div className="container flex h-16 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2" aria-label="Inter-Island Exchange home">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ocean-700 text-sm font-bold text-white">IIE</span>
-          <span className="hidden whitespace-nowrap font-semibold text-ocean-900 sm:inline">Inter-Island Exchange</span>
+        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Inter-Island Exchange home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/iie-logo.webp" alt="IIE" width={71} height={40} className="h-10 w-auto" />
+          <span className="hidden whitespace-nowrap font-semibold text-ocean-900 lg:inline">Inter-Island Exchange</span>
         </Link>
         <nav className="hidden items-center gap-1 2xl:flex" aria-label="Primary">
           {PRIMARY_NAV.filter((n) => n.href !== '/').map((item) => (

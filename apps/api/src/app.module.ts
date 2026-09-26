@@ -38,6 +38,13 @@ import { MarketplaceController } from './marketplace/marketplace.controller';
 import { CartService } from './cart/cart.service';
 import { SavedService } from './cart/saved.service';
 import { CartController, SavedController } from './cart/cart.controllers';
+import { NotificationsService } from './notifications/notifications.service';
+import { TransactionNotifier } from './transactions/transaction-notifier';
+import { TransactionEngine } from './transactions/transaction-engine';
+import { CheckoutService } from './transactions/checkout.service';
+import { CheckoutSettingsService } from './transactions/checkout-settings.service';
+import { OrdersService } from './transactions/orders.service';
+import { AdminTransactionsController, BuyerOrdersController, NotificationsController, SellerOrdersController } from './transactions/transactions.controllers';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 class PoolShutdown implements OnApplicationShutdown {
@@ -93,6 +100,10 @@ export class AppModule {
         MarketplaceController,
         CartController,
         SavedController,
+        BuyerOrdersController,
+        SellerOrdersController,
+        NotificationsController,
+        AdminTransactionsController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -124,6 +135,12 @@ export class AppModule {
         MarketplaceService,
         CartService,
         SavedService,
+        NotificationsService,
+        TransactionNotifier,
+        TransactionEngine,
+        CheckoutService,
+        CheckoutSettingsService,
+        OrdersService,
       ],
     };
   }

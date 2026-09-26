@@ -18,6 +18,8 @@ export const EVENTS = {
   productApproved: 'product.approved',
   productRejected: 'product.rejected',
   productChangesRequested: 'product.changes_requested',
+  orderPlaced: 'transaction.order_placed',
+  orderCancelled: 'transaction.cancelled',
 } as const;
 
 const SELLER_EVENTS: Record<string, 'approved' | 'rejected' | 'changes_requested' | 'activated' | 'suspended'> = {
@@ -47,7 +49,7 @@ export class NotificationDispatcher {
   ) {}
 
   async dispatch(type: string, payload: Record<string, unknown>): Promise<void> {
-    const to = payload as unknown as Recipient & { token?: string; notes?: string; productId?: string; productTitle?: string };
+    const to = payload as unknown as Recipient & { token?: string; notes?: string; productId?: string; productTitle?: string; iieId?: string; total?: string; reason?: string };
     const web = this.config.WEB_BASE_URL.replace(/\/$/, '');
     switch (type) {
       case EVENTS.emailVerificationRequested:
@@ -58,6 +60,10 @@ export class NotificationDispatcher {
         return this.email.send(templates.passwordReset(to.email, to.firstName, `${web}/reset-password?token=${encodeURIComponent(to.token!)}`));
       case EVENTS.passwordChanged:
         return this.email.send(templates.passwordChanged(to.email, to.firstName));
+      case EVENTS.orderPlaced:
+        return this.email.send(templates.orderPlaced(to.email, to.firstName, to.iieId!, to.total!, `${web}/orders/${to.iieId}`));
+      case EVENTS.orderCancelled:
+        return this.email.send(templates.orderCancelled(to.email, to.firstName, to.iieId!, to.reason!, `${web}/orders/${to.iieId}`));
       case EVENTS.accountSuspended:
         return this.email.send(templates.accountSuspended(to.email, to.firstName));
       default:

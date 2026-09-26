@@ -5,10 +5,10 @@ const escapeHtml = (s: string) =>
 
 function render(to: string, subject: string, paragraphs: string[], action?: { label: string; url: string }): EmailMessage {
   const text = [...paragraphs, ...(action ? [`${action.label}: ${action.url}`] : []), '', 'Inter-Island Exchange'].join('\n\n');
-  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#0f172a">
-<h2 style="color:#0e7490">Inter-Island Exchange</h2>
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#011e4d">
+<h2 style="color:#024381">Inter-Island Exchange</h2>
 ${paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')}
-${action ? `<p><a href="${escapeHtml(action.url)}" style="background:#0e7490;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block">${escapeHtml(action.label)}</a></p><p style="font-size:12px;color:#64748b">Or paste this link into your browser: ${escapeHtml(action.url)}</p>` : ''}
+${action ? `<p><a href="${escapeHtml(action.url)}" style="background:#024381;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block">${escapeHtml(action.label)}</a></p><p style="font-size:12px;color:#64748b">Or paste this link into your browser: ${escapeHtml(action.url)}</p>` : ''}
 </div>`;
   return { to, subject, text, html };
 }
@@ -59,6 +59,19 @@ export const templates = {
     }[decision];
     return render(to, copy[0]!, [`Hi ${firstName},`, copy[1]!, ...(notes ? [`Note from the IIE team: ${notes}`] : [])], { label: 'Open product', url });
   },
+  orderPlaced: (to: string, firstName: string, iieId: string, total: string, url: string) =>
+    render(
+      to,
+      `Order ${iieId}: complete your payment`,
+      [
+        `Hi ${firstName},`,
+        `Your order ${iieId} is placed and your items are reserved. Please complete payment of ${total} within 30 minutes, or the order is cancelled and the items released.`,
+        'Keep this order number: every step of your delivery is tracked under it.',
+      ],
+      { label: 'View order', url },
+    ),
+  orderCancelled: (to: string, firstName: string, iieId: string, reason: string, url: string) =>
+    render(to, `Order ${iieId} cancelled`, [`Hi ${firstName},`, reason, 'You have not been charged.'], { label: 'View order', url }),
   accountSuspended: (to: string, firstName: string) =>
     render(to, 'Your account has been suspended', [
       `Hi ${firstName},`,

@@ -285,6 +285,7 @@ export class SellersService {
       shippingOrigin: s.shippingOrigin,
       returnPolicy: s.returnPolicy,
       storePolicies: s.storePolicies,
+      feePayer: s.feePayer,
     };
   }
 }

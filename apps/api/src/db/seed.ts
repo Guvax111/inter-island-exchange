@@ -1,8 +1,8 @@
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { PERMISSIONS, ROLE_DEFINITIONS, ROLES } from '@iie/shared';
 import { createDatabase, Database } from './db';
-import { categories, countries, currencies, hsCodes, lanes, permissions, rolePermissions, roles } from './schema';
-import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_HS_CODES, SEED_LANES } from './seed-data';
+import { categories, countries, currencies, dutyEstimates, feeRules, hsCodes, laneShippingRates, lanes, permissions, rolePermissions, roles } from './schema';
+import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_DUTY_ESTIMATES, SEED_FEE_RULE, SEED_HS_CODES, SEED_LANES, SEED_SHIPPING_RATES } from './seed-data';
 
 /** Makes the roles/permissions tables match the catalogue in @iie/shared. */
 export async function syncRbac(db: Database): Promise<void> {
@@ -59,7 +59,41 @@ export async function seedReferenceData(db: Database): Promise<void> {
       .values({ slug: c.slug, name: c.name, sortOrder: c.sortOrder, parentId: parent?.id ?? null })
       .onConflictDoNothing();
   }
+  await seedCheckoutConfig(db);
   await syncRbac(db);
+}
+
+/** Checkout configuration is inserted only when none exists, so administrators' changes are never overwritten. */
+async function seedCheckoutConfig(db: Database): Promise<void> {
+  await db.insert(feeRules).values({ laneId: null, ...SEED_FEE_RULE }).onConflictDoNothing();
+  const all = await db.select({ id: countries.id, iso: countries.isoAlpha2, currency: countries.currencyCode }).from(countries);
+  const byIso = new Map(all.map((c) => [c.iso, c]));
+  const laneKeys = [...new Set(SEED_SHIPPING_RATES.map((r) => `${r.origin}-${r.destination}`))];
+  for (const key of laneKeys) {
+    const [originIso, destinationIso] = key.split('-') as [string, string];
+    const origin = byIso.get(originIso)!;
+    const [lane] = await db
+      .select()
+      .from(lanes)
+      .where(and(eq(lanes.originCountryId, origin.id), eq(lanes.destinationCountryId, byIso.get(destinationIso)!.id)));
+    if (!lane) continue;
+    const [existing] = await db.select({ id: laneShippingRates.id }).from(laneShippingRates).where(eq(laneShippingRates.laneId, lane.id)).limit(1);
+    if (existing) continue;
+    await db.insert(laneShippingRates).values(
+      SEED_SHIPPING_RATES.filter((r) => `${r.origin}-${r.destination}` === key).map((r) => ({
+        laneId: lane.id,
+        serviceName: r.serviceName,
+        maxWeightGrams: r.maxWeightGrams,
+        priceMinor: r.priceMinor,
+        currencyCode: origin.currency,
+        isPlaceholder: true,
+      })),
+    );
+  }
+  for (const d of SEED_DUTY_ESTIMATES) {
+    const { destination, ...rest } = d;
+    await db.insert(dutyEstimates).values({ destinationCountryId: byIso.get(destination)!.id, ...rest, isPlaceholder: true }).onConflictDoNothing();
+  }
 }
 
 if (require.main === module) {

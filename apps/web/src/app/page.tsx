@@ -13,7 +13,7 @@ const ctas = [
 export default function HomePage() {
   return (
     <>
-      <section className="bg-gradient-to-br from-ocean-900 via-ocean-800 to-ocean-600 text-white">
+      <section className="bg-gradient-to-br from-ocean-900 via-ocean-700 to-ocean-500 text-white">
         <div className="container py-16 md:py-24">
           <p className="text-sm font-semibold uppercase tracking-widest text-ocean-100">Inter-Island Exchange</p>
           <h1 className="mt-3 max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
@@ -23,7 +23,7 @@ export default function HomePage() {
             Buy from verified regional sellers, with every order tracked from payment to delivery under one IIE transaction ID.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg" className="bg-coral-500 hover:bg-coral-600">
+            <Button asChild size="lg" className="bg-palm-600 hover:bg-palm-700">
               <Link href="/signup?type=BUYER">Register as a Buyer</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white bg-transparent text-white hover:bg-white/10 hover:text-white">

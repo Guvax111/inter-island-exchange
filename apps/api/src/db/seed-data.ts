@@ -56,3 +56,33 @@ export const SEED_HS_CODES = [
   { code: '190110', description: 'Food preparations for infant use, put up for retail sale' },
   { code: '340111', description: 'Soap and organic surface-active products in bars or cakes, for toilet use' },
 ];
+
+/** IIE platform fee for the pilot: 5%, paid by the buyer unless the seller chooses to absorb it. */
+export const SEED_FEE_RULE = { percentBps: 500, defaultPayer: 'BUYER' as const };
+
+/**
+ * PLACEHOLDER shipping rates for St. Lucia -> St. Vincent (XCD), until the logistics partner supplies real ones.
+ * Flagged isPlaceholder so administrators can see which rates still need replacing.
+ */
+export const SEED_SHIPPING_RATES = [
+  { origin: 'LC', destination: 'VC', serviceName: 'Standard regional freight', maxWeightGrams: 1_000, priceMinor: 2500n },
+  { origin: 'LC', destination: 'VC', serviceName: 'Standard regional freight', maxWeightGrams: 2_000, priceMinor: 3500n },
+  { origin: 'LC', destination: 'VC', serviceName: 'Standard regional freight', maxWeightGrams: 5_000, priceMinor: 5500n },
+  { origin: 'LC', destination: 'VC', serviceName: 'Standard regional freight', maxWeightGrams: 10_000, priceMinor: 8500n },
+  { origin: 'LC', destination: 'VC', serviceName: 'Standard regional freight', maxWeightGrams: 20_000, priceMinor: 14000n },
+];
+
+/**
+ * St. Vincent and the Grenadines duty/tax ESTIMATE used for the pilot. Goods of CARICOM origin generally enter
+ * duty-free under the CARICOM common market; VAT applies. Placeholder until confirmed with a customs broker.
+ */
+export const SEED_DUTY_ESTIMATES = [
+  {
+    destination: 'VC',
+    hsPrefix: '',
+    caricomOriginDutyBps: 0,
+    otherOriginDutyBps: 2000,
+    vatBps: 1600,
+    notes: 'Pilot estimate: 0% duty on CARICOM-origin goods, 20% placeholder on other origins, 16% VAT on value plus shipping plus duty. Confirm with a customs broker.',
+  },
+];

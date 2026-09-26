@@ -29,6 +29,20 @@
       "when": 1790384738355,
       "tag": "0003_marketplace_search_and_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790388001004,
+      "tag": "0004_transactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790388001803,
+      "tag": "0005_transaction_sequence_and_ledger",
+      "breakpoints": true
     }
   ]
 }

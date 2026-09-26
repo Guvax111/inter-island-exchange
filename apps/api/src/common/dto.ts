@@ -2,6 +2,15 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import {
   addressCreateSchema,
+  adminTransactionQuerySchema,
+  cancelOrderSchema,
+  checkoutQuoteSchema,
+  dutyEstimateSchema,
+  dutyEstimateUpdateSchema,
+  feeRuleUpdateSchema,
+  placeOrderSchema,
+  shippingRateSchema,
+  shippingRateUpdateSchema,
   adminProductQuerySchema,
   adminUserQuerySchema,
   cartAddSchema,
@@ -88,3 +97,15 @@ export class CartUpdateDto extends createZodDto(cartUpdateSchema) {}
 export class AddressCreateDto extends createZodDto(addressCreateSchema) {}
 export class ImageUploadDto extends createZodDto(z.object({ altText: z.string().trim().max(200).optional() })) {}
 export class SellerQueryDto extends createZodDto(z.object({ country: z.string().regex(/^[A-Z]{2}$/).optional() })) {}
+
+// Phase 3
+export class CheckoutQuoteDto extends createZodDto(checkoutQuoteSchema) {}
+export class PlaceOrderDto extends createZodDto(placeOrderSchema) {}
+export class CancelOrderDto extends createZodDto(cancelOrderSchema) {}
+export class AdminTransactionQueryDto extends createZodDto(adminTransactionQuerySchema) {}
+export class ShippingRateDto extends createZodDto(shippingRateSchema) {}
+export class ShippingRateUpdateDto extends createZodDto(shippingRateUpdateSchema) {}
+export class FeeRuleUpdateDto extends createZodDto(feeRuleUpdateSchema) {}
+export class DutyEstimateDto extends createZodDto(dutyEstimateSchema) {}
+export class DutyEstimateUpdateDto extends createZodDto(dutyEstimateUpdateSchema) {}
+export class MarkReadDto extends createZodDto(z.object({ ids: z.array(z.uuid()).max(100).default([]) })) {}
