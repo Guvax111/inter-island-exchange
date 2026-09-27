@@ -24,6 +24,8 @@ x-api-env: &api-env
   MEDIA_LOCAL_DIR: /data/media
   PAYMENT_PROVIDER: sandbox
   SANDBOX_PAYMENT_SECRET: ${SANDBOX_PAYMENT_SECRET:?set SANDBOX_PAYMENT_SECRET}
+  # The pilot is a rehearsal with test orders: every page and every email says so.
+  ENVIRONMENT_LABEL: ${ENVIRONMENT_LABEL:-Pilot rehearsal}
 
 services:
   postgres:
@@ -78,7 +80,7 @@ services:
       target: web
       args:
         API_ORIGIN: http://api:4000
-        NEXT_PUBLIC_ENVIRONMENT_LABEL: Staging
+        NEXT_PUBLIC_ENVIRONMENT_LABEL: ${ENVIRONMENT_LABEL:-Pilot rehearsal}
     restart: unless-stopped
     environment:
       API_ORIGIN: http://api:4000

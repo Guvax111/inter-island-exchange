@@ -79,10 +79,67 @@ curl -fsS https://<SITE_DOMAIN>/api/v1/health       # {"status":"ok"}
 docker compose logs --tail 20 worker                 # "IIE worker (staging) started"
 ```
 
-Then run through the pilot by hand: register a seller in St. Lucia and a buyer in St. Vincent (the verification
-emails arrive through Gmail), approve the seller and the product as the administrator, order, and pay on the
-**SANDBOX PAYMENT PAGE**. The same flow is covered by the automated end-to-end test, which has been run against these
-containers.
+Then run through the pilot by hand (see *The pilot rehearsal* below). The same flow is covered by the automated
+end-to-end test, which has been run against these containers.
+
+## The pilot rehearsal
+
+IIE decided (2026-09-27) that the pilot is a **rehearsal with test orders**: no real money moves and no goods are
+shipped. The site says so everywhere:
+
+- every page carries the banner "Pilot rehearsal · test orders only: no real money moves and no goods are shipped";
+- every email starts with "[Pilot rehearsal]" in the subject and a notice at the top;
+- payments go through the **SANDBOX PAYMENT PAGE**; search engines are asked not to index the site.
+
+The label comes from `ENVIRONMENT_LABEL` in `.env` (default "Pilot rehearsal"). Production refuses to start with it.
+
+### Who plays which part
+
+IIE staff use their own email addresses (the emails are real and arrive through Gmail):
+
+| Part | Account |
+|---|---|
+| Seller in St. Lucia | Registers as a seller; uploads any PDF as the registration certificate |
+| Buyer in St. Vincent | Registers as a buyer |
+| Carrier and customs broker | Created by the administrator in *Admin → Logistics* (St. Lucia → St. Vincent lane), with a staff member invited to each |
+| Customer support | An account given the Customer Support role in *Admin → Users* |
+| Administrator | The first administrator (step 5 above) |
+| Directors | Added under *Admin → Reports* to receive the Monday email |
+
+### Scenarios to run
+
+| # | Scenario | What to check | Waiting time |
+|---|---|---|---|
+| 1 | Order, pay, confirm, ship, deliver, confirm delivery | Every step's email; tracking; proof of delivery | None |
+| 2 | Card declined, then paid | The order stays reserved; retry works | None |
+| 3 | Seller declines the order | Buyer refunded in full; stock back | None |
+| 4 | Seller does nothing | Automatic full refund | 48 hours |
+| 5 | Buyer does not confirm delivery | Automatic confirmation | 3 days |
+| 6 | Seller payout | Paid when the review period ends | 7 days after delivery is confirmed |
+| 7 | Missing item reported | Messages go through IIE only; partial refund | None |
+| 8 | Wrong item, full refund | IIE chooses who pays the carrier; if the seller, it is kept back from their next payout | None |
+| 9 | Buyer reviews an order | Nothing public until IIE publishes it | None |
+| 10 | Question to IIE | *Messages*, reply by support | None |
+| 11 | Settlements | Record a remittance and a carrier payment in *Admin → Settlements* | None |
+| 12 | Directors' report | Monday 08:00 email, or *Send this report now* | Next Monday |
+
+## Clearing the rehearsal before launch
+
+If production runs on a **new server** (the plan), nothing needs clearing: the rehearsal stays on staging.
+
+To reuse **this** server for a clean start instead, keep a backup of the rehearsal and then delete its data. This deletes
+every account, order, image and ledger entry on this server and cannot be undone except from the backup:
+
+```sh
+cd /opt/iie/deploy/staging
+./backup.sh                                   # the rehearsal record; keep it
+docker compose down
+docker volume rm iie-staging_pgdata iie-staging_media
+docker compose up -d                          # migrations and reference data run again
+# then create the first administrator again (step 5 of First install)
+```
+
+Transaction numbers start again at 000001 on a clean database.
 
 ## Updating
 
@@ -152,7 +209,7 @@ append-only and balance rules all come back.
 | Email | Gmail | Gmail at first; a transactional email service when volume grows |
 | Images | Server disk (`media` volume) | Object storage; local disk is refused |
 | Database | Container on the same server | Managed or separately hosted PostgreSQL with point-in-time recovery |
-| Banner / search engines | "Staging" banner, `noindex` | Neither |
+| Banner, emails, search engines | "Pilot rehearsal" banner and email label, `noindex` | None of these (refused by configuration) |
 
 ## Building behind a TLS-inspecting proxy
 

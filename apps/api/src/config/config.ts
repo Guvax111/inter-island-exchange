@@ -21,6 +21,11 @@ const envSchema = z
     MFA_ENCRYPTION_KEY: z.string().refine((v) => Buffer.from(v, 'base64').length === 32, 'Must be 32 bytes, base64-encoded'),
     EMAIL_PROVIDER: z.enum(['sandbox', 'smtp']).default('sandbox'),
     EMAIL_FROM: z.string().min(3),
+    /**
+     * Non-production sites (e.g. "Pilot rehearsal"): prefixes every email subject with [label] and adds a notice that
+     * orders are test orders. Must match the web app's NEXT_PUBLIC_ENVIRONMENT_LABEL. Refused in production.
+     */
+    ENVIRONMENT_LABEL: z.string().trim().max(40).optional(),
     /** Sandbox only: also write each email to this folder as JSON. */
     EMAIL_SANDBOX_DIR: z.string().optional(),
     SMTP_HOST: z.string().optional(),
@@ -61,6 +66,9 @@ const envSchema = z
       }
       if (env.STORAGE_PROVIDER === 'local') {
         ctx.addIssue({ code: 'custom', path: ['STORAGE_PROVIDER'], message: 'Local disk storage is not allowed in production; configure object storage' });
+      }
+      if (env.ENVIRONMENT_LABEL) {
+        ctx.addIssue({ code: 'custom', path: ['ENVIRONMENT_LABEL'], message: 'Test-site labels are not allowed in production' });
       }
       if (!env.COOKIE_SECURE) ctx.addIssue({ code: 'custom', path: ['COOKIE_SECURE'], message: 'Must be true in production' });
       if (!env.WEB_BASE_URL.startsWith('https://')) {

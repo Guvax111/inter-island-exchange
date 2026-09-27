@@ -64,6 +64,36 @@ export class SmtpEmailProvider implements EmailProvider {
   }
 }
 
+/**
+ * On a test site (e.g. the pilot rehearsal) every email says so: "[Pilot rehearsal]" before the subject and a notice
+ * at the top, so nobody mistakes a test order for a real one.
+ */
+export class LabelledEmailProvider implements EmailProvider {
+  constructor(
+    private readonly inner: EmailProvider,
+    private readonly label: string,
+  ) {}
+
+  get key() {
+    return this.inner.key;
+  }
+
+  send(message: EmailMessage): Promise<void> {
+    const notice = `${this.label}: this email is about a test order on the IIE test site. No real money has moved and no goods will be shipped.`;
+    const safe = notice.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    return this.inner.send({
+      ...message,
+      subject: `[${this.label}] ${message.subject}`,
+      text: `${notice}\n\n${message.text}`,
+      html: `<p style="background:#fff4e8;border:1px solid #f2c49b;padding:8px 12px;font-family:Arial,sans-serif;color:#9a3412">${safe}</p>\n${message.html}`,
+    });
+  }
+}
+
+export function withEnvironmentLabel(provider: EmailProvider, config: AppConfig): EmailProvider {
+  return config.ENVIRONMENT_LABEL ? new LabelledEmailProvider(provider, config.ENVIRONMENT_LABEL) : provider;
+}
+
 export function createEmailProvider(config: AppConfig): EmailProvider {
   return config.EMAIL_PROVIDER === 'smtp' ? new SmtpEmailProvider(config) : new SandboxEmailProvider(config.APP_ENV === 'local', config.EMAIL_SANDBOX_DIR);
 }

@@ -653,15 +653,16 @@ conversation, publishing a Help article, and sending the weekly report.
 | Launch date | Set after IIE has **seen the pilot** |
 | Business Solutions | Built **after the pilot** |
 | Support hours | **Monday to Friday, 8:00 am to 5:00 pm** (St. Vincent time), shown on the Contact page, the footer, *Messages* and the Help Center |
+| Money during the pilot | The pilot is a **rehearsal with test orders**: no real money and no real goods. The staging site and every email are labelled "Pilot rehearsal"; scenarios and roles are in [`IIE_DEPLOYMENT.md`](IIE_DEPLOYMENT.md#the-pilot-rehearsal) |
 
 ### What will be built
 
 **Stage 1 — Show the pilot (now):**
 
 1. A walkthrough of the whole St. Lucia → St. Vincent pilot, from seller sign-up to the directors' report, for IIE to review.
-2. The pilot site on the St. Vincent staging server (see [`IIE_DEPLOYMENT.md`](IIE_DEPLOYMENT.md)), with the sandbox
-   payment page clearly labelled and IIE staff acting as the logistics partner and customs broker in the partner portal
-   until a partner is contracted.
+2. The pilot rehearsal on the St. Vincent staging server (see [`IIE_DEPLOYMENT.md`](IIE_DEPLOYMENT.md#the-pilot-rehearsal)):
+   test orders only, every page and email labelled "Pilot rehearsal", IIE staff playing seller, buyer, carrier, customs
+   broker and support, and twelve scenarios including the 48-hour, 3-day and 7-day timers.
 3. Changes IIE asks for after seeing it.
 
 **Stage 2 — Launch readiness (after the pilot):**
@@ -675,6 +676,4 @@ conversation, publishing a Help article, and sending the weekly report.
 
 ### Decisions requested
 
-- **Money during the pilot:** the platform moves no real money until a provider is contracted. If the pilot involves
-  real goods, how are the seller and the carrier paid (outside the platform), or is the pilot a rehearsal with test orders?
 - **Who from IIE takes part:** staff accounts for customer support, the partner-portal role, and the directors' email list.

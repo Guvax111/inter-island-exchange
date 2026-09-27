@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </a>
           {ENVIRONMENT_LABEL && (
             <p className="bg-coral-500 px-4 py-1 text-center text-sm font-semibold text-white" role="note">
-              {ENVIRONMENT_LABEL} · test site: payments use a sandbox and no real money moves
+              {ENVIRONMENT_LABEL} · test orders only: no real money moves and no goods are shipped
             </p>
           )}
           <SiteHeader />

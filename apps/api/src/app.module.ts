@@ -8,7 +8,7 @@ import { createDatabase, DB, PG_POOL } from './db/db';
 import { AuditService } from './audit/audit.service';
 import { OutboxService } from './outbox/outbox.service';
 import { OutboxPoller } from './outbox/outbox.poller';
-import { createEmailProvider, EMAIL_PROVIDER, EmailProvider } from './email/email.provider';
+import { createEmailProvider, EMAIL_PROVIDER, EmailProvider, withEnvironmentLabel } from './email/email.provider';
 import { NotificationDispatcher } from './email/notification.dispatcher';
 import { RbacService } from './rbac/rbac.service';
 import { SessionService } from './auth/session.service';
@@ -155,7 +155,7 @@ export class AppModule {
         { provide: APP_CONFIG, useValue: config },
         { provide: DB, useValue: db },
         { provide: PG_POOL, useValue: pool },
-        { provide: EMAIL_PROVIDER, useValue: options.emailProvider ?? createEmailProvider(config) },
+        { provide: EMAIL_PROVIDER, useValue: withEnvironmentLabel(options.emailProvider ?? createEmailProvider(config), config) },
         { provide: STORAGE_PROVIDER, useValue: options.storageProvider ?? createStorageProvider(config) },
         { provide: PRODUCT_SEARCH, useClass: PostgresProductSearch },
         { provide: PAYMENT_PROVIDER, useValue: options.paymentProvider ?? createPaymentProvider(config) },
