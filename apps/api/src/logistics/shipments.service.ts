@@ -30,6 +30,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import type { Principal } from '../rbac/principal';
 import { STATUS_LABELS } from '../transactions/state-machine';
 import { TransactionEngine, type Actor } from '../transactions/transaction-engine';
+import { SettlementsService } from '../settlements/settlements.service';
 
 type TransactionRow = typeof transactions.$inferSelect;
 type ShipmentRow = typeof shipments.$inferSelect;
@@ -97,6 +98,7 @@ export class ShipmentsService {
     private readonly media: MediaService,
     private readonly notifications: NotificationsService,
     private readonly outbox: OutboxService,
+    private readonly settlements: SettlementsService,
   ) {}
 
   // ------------------------------------------------------------------ seller
@@ -336,6 +338,8 @@ export class ShipmentsService {
         set: { deliveryConfirmDueAt: confirmDue },
         metadata: { shipmentId: s.id, photo: !!photo, signature: !!signature },
       });
+      // IIE owes the carrier its shipping charge, net 45 days from delivery.
+      await this.settlements.logisticsPaymentDue(tx, t, s.logisticsPartnerId!, input.deliveredAt);
       await this.audit.record(tx, meta, { action: 'shipment.delivered', entityType: 'shipment', entityId: s.id, after: { iieId: t.iieId, recipientName: input.recipientName, deliveredAt: input.deliveredAt, photo: !!photo, signature: !!signature } });
     });
     return this.detailForPartner(principal, iieId);

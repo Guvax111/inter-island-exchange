@@ -5,7 +5,7 @@ import { desc, eq } from 'drizzle-orm';
 import { formatMinor, sandboxOutcomeSchema } from '@iie/shared';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { Database, DB } from '../db/db';
-import { currencies, paymentIntents, payouts, sellerProfiles, sellerStorefronts, transactions } from '../db/schema';
+import { currencies, paymentIntents, payouts, sellerCharges, sellerProfiles, sellerStorefronts, transactions } from '../db/schema';
 import { DeclineSaleDto, ExchangeRateDto } from '../common/dto';
 import { Errors } from '../common/errors';
 import { toMoneyDto } from '../common/money';
@@ -192,7 +192,16 @@ export class AdminPaymentsController {
       .where(status ? eq(payouts.status, status) : undefined)
       .orderBy(desc(payouts.createdAt))
       .limit(200);
-    return { items: rows.map((r) => ({ iieId: r.iieId, seller: r.store, status: r.payout.status, amount: toMoneyDto(r.payout.amountMinor, r.currency), createdAt: r.payout.createdAt })) };
+    return {
+      items: rows.map((r) => ({
+        iieId: r.iieId,
+        seller: r.store,
+        status: r.payout.status,
+        amount: toMoneyDto(r.payout.amountMinor, r.currency),
+        deducted: r.payout.deductedMinor > 0n ? toMoneyDto(r.payout.deductedMinor, r.currency) : null,
+        createdAt: r.payout.createdAt,
+      })),
+    };
   }
 
   @RequirePermissions('config.manage')
@@ -218,7 +227,7 @@ export class SellerPayoutsController {
   @Get()
   async list(@CurrentPrincipal() p: Principal) {
     const [seller] = await this.db.select().from(sellerProfiles).where(eq(sellerProfiles.userId, p.userId));
-    if (!seller) return { items: [], totals: [] };
+    if (!seller) return { items: [], charges: [] };
     const rows = await this.db
       .select({ payout: payouts, iieId: transactions.iieId, status: transactions.status, reviewEndsAt: transactions.reviewEndsAt, currency: currencies })
       .from(payouts)
@@ -232,11 +241,24 @@ export class SellerPayoutsController {
         iieId: r.iieId,
         status: r.payout.status,
         amount: toMoneyDto(r.payout.amountMinor, r.currency),
+        /** Kept back to settle what the seller owed IIE (e.g. shipping on a refunded order). */
+        deducted: r.payout.deductedMinor > 0n ? toMoneyDto(r.payout.deductedMinor, r.currency) : null,
         // When the payout is due: the end of the review period, once delivery is confirmed.
         dueAt: r.status === 'DISPUTE_WINDOW' ? r.reviewEndsAt : null,
         paidAt: r.payout.releasedAt,
         providerReference: r.payout.providerPayoutId,
       })),
+      // Amounts owed to IIE that are still to be kept back from coming payouts.
+      charges: (
+        await this.db
+          .select({ c: sellerCharges, iieId: transactions.iieId, currency: currencies })
+          .from(sellerCharges)
+          .innerJoin(transactions, eq(transactions.id, sellerCharges.transactionId))
+          .innerJoin(currencies, eq(currencies.code, sellerCharges.currencyCode))
+          .where(eq(sellerCharges.sellerProfileId, seller.id))
+          .orderBy(desc(sellerCharges.createdAt))
+          .limit(100)
+      ).map((r) => ({ iieId: r.iieId, kind: r.c.kind, note: r.c.note, amount: toMoneyDto(r.c.amountMinor, r.currency), remaining: toMoneyDto(r.c.remainingMinor, r.currency), status: r.c.status, createdAt: r.c.createdAt })),
     };
   }
 }

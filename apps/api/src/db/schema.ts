@@ -883,6 +883,8 @@ export const payouts = pgTable(
     transactionId: uuid('transaction_id').notNull().unique().references(() => transactions.id),
     sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
     amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    /** Kept back from this payout to settle what the seller owed IIE (seller_charges); already taken off amountMinor. */
+    deductedMinor: bigint('deducted_minor', { mode: 'bigint' }).notNull().default(sql`0`),
     currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
     status: varchar('status', { length: 20 }).notNull().default('ON_HOLD'),
     releasedAt: timestamp('released_at', { withTimezone: true }),
@@ -1074,6 +1076,8 @@ export const disputes = pgTable(
     returnRequired: boolean('return_required').notNull().default(false),
     returnInstructions: text('return_instructions'),
     decisionNote: text('decision_note'),
+    /** Full refund after delivery: who covers the carrier's shipping charge. */
+    shippingBorneBy: varchar('shipping_borne_by', { length: 10 }),
     decidedBy: uuid('decided_by').references(() => users.id),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     createdAt: createdAt(),
@@ -1096,9 +1100,15 @@ export const disputeMessages = pgTable(
     authorRole: varchar('author_role', { length: 10 }).notNull(),
     body: text('body').notNull(),
     mediaId: uuid('media_id').references(() => mediaAssets.id),
+    /** Who besides IIE sees it. Buyer and seller messages go to IIE only; IIE chooses the audience of its own. */
+    visibleTo: varchar('visible_to', { length: 10 }).notNull().default('BOTH'),
     createdAt: createdAt(),
   },
-  (t) => [check('dispute_messages_role_chk', inList('author_role', ['BUYER', 'SELLER', 'IIE'])), index('dispute_messages_dispute_idx').on(t.disputeId, t.id)],
+  (t) => [
+    check('dispute_messages_role_chk', inList('author_role', ['BUYER', 'SELLER', 'IIE'])),
+    check('dispute_messages_visible_chk', inList('visible_to', ['BUYER', 'SELLER', 'BOTH'])),
+    index('dispute_messages_dispute_idx').on(t.disputeId, t.id),
+  ],
 );
 
 /** Proof of business registration or national ID, required before a seller is approved. Files are private. */
@@ -1182,5 +1192,163 @@ export const tariffLines = pgTable(
   (t) => [
     check('tariff_lines_restriction_chk', inList('restriction', ['NONE', 'LICENCE_REQUIRED', 'PROHIBITED'])),
     unique('tariff_lines_schedule_hs_uq').on(t.scheduleId, t.hsCode),
+  ],
+);
+
+// ---------------------------------------------------------------- Phase 7: settlement, reports, reviews, messaging, help
+
+/** Amounts a seller owes IIE (e.g. shipping on a full refund the seller bears), recovered from later payouts. */
+export const sellerCharges = pgTable(
+  'seller_charges',
+  {
+    id: id(),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    kind: varchar('kind', { length: 40 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    remainingMinor: bigint('remaining_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    status: varchar('status', { length: 20 }).notNull().default('OUTSTANDING'),
+    note: text('note'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('seller_charges_status_chk', inList('status', ['OUTSTANDING', 'RECOVERED'])),
+    check('seller_charges_amounts_chk', sql`${t.remainingMinor} >= 0 and ${t.remainingMinor} <= ${t.amountMinor}`),
+    index('seller_charges_seller_idx').on(t.sellerProfileId, t.status),
+  ],
+);
+
+/**
+ * Money owed between IIE and its partners per transaction: the payment provider remits IIE's share (fee and
+ * shipping) net 30 days after the payout; IIE pays the logistics partner net 45 days after delivery.
+ */
+export const settlements = pgTable(
+  'settlements',
+  {
+    id: id(),
+    kind: varchar('kind', { length: 30 }).notNull(),
+    transactionId: uuid('transaction_id').notNull().references(() => transactions.id),
+    partnerId: uuid('partner_id').references(() => servicePartners.id),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currencyCode: char('currency_code', { length: 3 }).notNull().references(() => currencies.code),
+    dueAt: timestamp('due_at', { withTimezone: true }).notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('DUE'),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    reference: varchar('reference', { length: 120 }),
+    recordedBy: uuid('recorded_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('settlements_kind_chk', inList('kind', ['PROVIDER_REMITTANCE', 'LOGISTICS_PAYMENT'])),
+    check('settlements_status_chk', inList('status', ['DUE', 'PAID'])),
+    unique('settlements_kind_tx_uq').on(t.kind, t.transactionId),
+    index('settlements_due_idx').on(t.status, t.dueAt),
+  ],
+);
+
+/** People who receive the weekly directors' report. */
+export const reportRecipients = pgTable('report_recipients', {
+  id: id(),
+  email: varchar('email', { length: 254 }).notNull().unique(),
+  name: varchar('name', { length: 120 }).notNull(),
+  active: boolean('active').notNull().default(true),
+  createdAt: createdAt(),
+});
+
+/** Each weekly report sent (one scheduled run per week). */
+export const reportRuns = pgTable(
+  'report_runs',
+  {
+    id: id(),
+    kind: varchar('kind', { length: 20 }).notNull(),
+    weekStart: timestamp('week_start', { withTimezone: true }).notNull(),
+    recipients: integer('recipients').notNull(),
+    figures: jsonb('figures').$type<Record<string, unknown>>().notNull(),
+    sentBy: uuid('sent_by').references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('report_runs_kind_chk', inList('kind', ['SCHEDULED', 'MANUAL'])),
+    uniqueIndex('report_runs_scheduled_week_uq').on(t.weekStart).where(sql`kind = 'SCHEDULED'`),
+  ],
+);
+
+/** Buyer's rating and written review of a completed order; published only after IIE approves it. */
+export const reviews = pgTable(
+  'reviews',
+  {
+    id: id(),
+    transactionId: uuid('transaction_id').notNull().unique().references(() => transactions.id),
+    buyerUserId: uuid('buyer_user_id').notNull().references(() => users.id),
+    sellerProfileId: uuid('seller_profile_id').notNull().references(() => sellerProfiles.id),
+    rating: smallint('rating').notNull(),
+    title: varchar('title', { length: 120 }),
+    body: text('body'),
+    status: varchar('status', { length: 20 }).notNull().default('PENDING'),
+    moderationNote: text('moderation_note'),
+    moderatedBy: uuid('moderated_by').references(() => users.id),
+    moderatedAt: timestamp('moderated_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('reviews_rating_chk', sql`${t.rating} between 1 and 5`),
+    check('reviews_status_chk', inList('status', ['PENDING', 'PUBLISHED', 'REJECTED'])),
+    index('reviews_seller_idx').on(t.sellerProfileId, t.status),
+    index('reviews_status_idx').on(t.status, t.createdAt),
+  ],
+);
+
+/** A conversation between a user and IIE (buyers and sellers talk through IIE, never directly). */
+export const supportThreads = pgTable(
+  'support_threads',
+  {
+    id: id(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    subject: varchar('subject', { length: 150 }).notNull(),
+    transactionId: uuid('transaction_id').references(() => transactions.id),
+    status: varchar('status', { length: 20 }).notNull().default('OPEN'),
+    /** Who spoke last, to show "waiting for IIE" / "IIE replied". */
+    lastAuthorRole: varchar('last_author_role', { length: 10 }).notNull().default('USER'),
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [check('support_threads_status_chk', inList('status', ['OPEN', 'CLOSED'])), index('support_threads_user_idx').on(t.userId), index('support_threads_status_idx').on(t.status, t.lastMessageAt)],
+);
+
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    threadId: uuid('thread_id').notNull().references(() => supportThreads.id),
+    authorUserId: uuid('author_user_id').notNull().references(() => users.id),
+    authorRole: varchar('author_role', { length: 10 }).notNull(),
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [check('support_messages_role_chk', inList('author_role', ['USER', 'IIE'])), index('support_messages_thread_idx').on(t.threadId, t.id)],
+);
+
+/** Help Center articles, written and published by IIE staff. */
+export const helpArticles = pgTable(
+  'help_articles',
+  {
+    id: id(),
+    slug: varchar('slug', { length: 60 }).notNull().unique(),
+    title: varchar('title', { length: 150 }).notNull(),
+    audience: varchar('audience', { length: 10 }).notNull(),
+    summary: varchar('summary', { length: 300 }).notNull().default(''),
+    body: text('body').notNull(),
+    status: varchar('status', { length: 20 }).notNull().default('DRAFT'),
+    sortOrder: integer('sort_order').notNull().default(100),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('help_articles_audience_chk', inList('audience', ['BUYER', 'SELLER', 'PARTNER', 'ALL'])),
+    check('help_articles_status_chk', inList('status', ['DRAFT', 'PUBLISHED'])),
   ],
 );

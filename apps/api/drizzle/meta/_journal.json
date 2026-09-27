@@ -92,6 +92,20 @@
       "when": 1790459279926,
       "tag": "0012_phase6_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790472869471,
+      "tag": "0013_settlement_reports_reviews_support_help",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790472870507,
+      "tag": "0014_phase7_rules",
+      "breakpoints": true
     }
   ]
 }

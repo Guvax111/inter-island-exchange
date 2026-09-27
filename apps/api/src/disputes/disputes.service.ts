@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
-import { parseDecimalToMinor, type DisputeDecision, type TransactionStatus } from '@iie/shared';
+import { parseDecimalToMinor, type DisputeDecision, type ShippingBearer, type TransactionStatus } from '@iie/shared';
 import { Database, DB, Tx } from '../db/db';
 import { currencies, disputeMessages, disputes, payouts, sellerProfiles, transactions, users } from '../db/schema';
 import { Errors } from '../common/errors';
@@ -18,13 +18,15 @@ import { TransactionEngine } from '../transactions/transaction-engine';
 
 type TransactionRow = typeof transactions.$inferSelect;
 type Role = 'BUYER' | 'SELLER' | 'IIE';
+type Audience = 'BUYER' | 'SELLER' | 'BOTH';
 type Upload = { buffer: Buffer; size: number } | undefined;
 
 /** States in which the buyer can still report a problem: after delivery, until the review period ends. */
 const REPORTABLE: TransactionStatus[] = ['DELIVERED', 'DISPUTE_WINDOW'];
 
 /**
- * Problems reported by buyers. Buyer, seller and IIE exchange messages and photo evidence; IIE decides:
+ * Problems reported by buyers. Buyers and sellers never talk to each other directly: each writes to IIE (with photo
+ * evidence), and IIE chooses who sees its own messages and can pass evidence on to the other side. IIE decides:
  * full refund, partial refund (borne by the seller) or release to the seller, and whether the goods must be
  * returned (case by case). Refunds and payouts go through the payment provider and the ledger.
  */
@@ -54,7 +56,7 @@ export class DisputesService {
         expectedVersion: t.version,
       });
       const [d] = await tx.insert(disputes).values({ transactionId: t.id, openedBy: principal.userId, reason }).returning();
-      await tx.insert(disputeMessages).values({ disputeId: d!.id, authorUserId: principal.userId, authorRole: 'BUYER', body: reason });
+      await tx.insert(disputeMessages).values({ disputeId: d!.id, authorUserId: principal.userId, authorRole: 'BUYER', body: reason, visibleTo: 'BUYER' });
       await this.shipments.shipmentNote(tx, t.id, 'PROBLEM_REPORTED', 'BUYER', principal.userId, reason);
       await this.audit.record(tx, meta, { action: 'dispute.opened', entityType: 'dispute', entityId: d!.id, after: { iieId: t.iieId, reason } });
     });
@@ -68,33 +70,66 @@ export class DisputesService {
     return this.shape(t, role);
   }
 
-  /** Adds a message, optionally with one photo as evidence. Only while the dispute is open. */
-  async message(principal: Principal, iieId: string, body: string, file: Upload, meta: RequestMeta) {
+  /**
+   * Adds a message, optionally with one photo as evidence. Only while the dispute is open. A buyer's or seller's
+   * message goes to IIE only; IIE's goes to the audience it chooses (both parties by default).
+   */
+  async message(principal: Principal, iieId: string, input: { body: string; audience?: Audience }, file: Upload, meta: RequestMeta) {
     const t = await this.loadTransaction(iieId);
     const role = await this.roleOf(principal, t);
     if (!role) throw Errors.notFound('Dispute');
     const [d] = await this.db.select().from(disputes).where(eq(disputes.transactionId, t.id));
     if (!d) throw Errors.notFound('Dispute');
     if (d.status !== 'OPEN') throw Errors.conflict('DISPUTE_CLOSED', 'This dispute has been decided');
+    const visibleTo: Audience = role === 'IIE' ? (input.audience ?? 'BOTH') : role;
     await this.db.transaction(async (tx) => {
       const evidence = file ? await this.media.storeImage(tx, principal.userId, 'DISPUTE_EVIDENCE', file) : null;
-      await tx.insert(disputeMessages).values({ disputeId: d.id, authorUserId: principal.userId, authorRole: role, body, mediaId: evidence?.id ?? null });
-      await this.audit.record(tx, meta, { action: 'dispute.message', entityType: 'dispute', entityId: d.id, after: { role, evidence: !!evidence } });
-      // Tell the other parties.
-      const [buyer] = await tx.select().from(users).where(eq(users.id, t.buyerUserId));
-      const [seller] = await tx.select({ user: users }).from(sellerProfiles).innerJoin(users, eq(users.id, sellerProfiles.userId)).where(eq(sellerProfiles.id, t.sellerProfileId));
-      const subject = `New message on the problem reported for ${t.iieId}`;
-      if (role !== 'BUYER') await this.email(tx, buyer!, subject, 'There is a new message about the problem you reported.', `/orders/${t.iieId}`);
-      if (role !== 'SELLER') await this.email(tx, seller!.user, subject, 'There is a new message about the problem the buyer reported.', `/dashboard/seller/orders/${t.iieId}`);
+      await tx.insert(disputeMessages).values({ disputeId: d.id, authorUserId: principal.userId, authorRole: role, body: input.body, mediaId: evidence?.id ?? null, visibleTo });
+      await this.audit.record(tx, meta, { action: 'dispute.message', entityType: 'dispute', entityId: d.id, after: { role, visibleTo, evidence: !!evidence } });
+      if (role === 'IIE') await this.tell(tx, t, visibleTo);
     });
     return this.view(principal, iieId);
+  }
+
+  /** IIE passes a buyer's or seller's message (and its photo) on to the other side. */
+  async share(principal: Principal, iieId: string, messageId: string, meta: RequestMeta) {
+    const t = await this.loadTransaction(iieId);
+    if ((await this.roleOf(principal, t)) !== 'IIE') throw Errors.notFound('Dispute');
+    const [d] = await this.db.select().from(disputes).where(eq(disputes.transactionId, t.id));
+    if (!d) throw Errors.notFound('Dispute');
+    if (d.status !== 'OPEN') throw Errors.conflict('DISPUTE_CLOSED', 'This dispute has been decided');
+    const [m] = await this.db
+      .select()
+      .from(disputeMessages)
+      .where(and(eq(disputeMessages.disputeId, d.id), eq(disputeMessages.id, BigInt(/^\d{1,18}$/.test(messageId) ? messageId : '0'))));
+    if (!m || m.authorRole === 'IIE') throw Errors.notFound('Message');
+    const to: Audience = m.authorRole === 'BUYER' ? 'SELLER' : 'BUYER';
+    const from = m.authorRole === 'BUYER' ? 'the buyer' : 'the seller';
+    await this.db.transaction(async (tx) => {
+      await tx.insert(disputeMessages).values({ disputeId: d.id, authorUserId: principal.userId, authorRole: 'IIE', body: `Shared from ${from}: ${m.body}`, mediaId: m.mediaId, visibleTo: to });
+      await this.audit.record(tx, meta, { action: 'dispute.message_shared', entityType: 'dispute', entityId: d.id, after: { messageId: m.id.toString(), to } });
+      await this.tell(tx, t, to);
+    });
+    return this.view(principal, iieId);
+  }
+
+  private async tell(tx: Tx, t: TransactionRow, audience: Audience) {
+    const subject = `New message from IIE about ${t.iieId}`;
+    if (audience !== 'SELLER') {
+      const [buyer] = await tx.select().from(users).where(eq(users.id, t.buyerUserId));
+      await this.email(tx, buyer!, subject, 'IIE has sent you a message about the problem you reported.', `/orders/${t.iieId}`);
+    }
+    if (audience !== 'BUYER') {
+      const [seller] = await tx.select({ user: users }).from(sellerProfiles).innerJoin(users, eq(users.id, sellerProfiles.userId)).where(eq(sellerProfiles.id, t.sellerProfileId));
+      await this.email(tx, seller!.user, subject, 'IIE has sent you a message about the problem the buyer reported.', `/dashboard/seller/orders/${t.iieId}`);
+    }
   }
 
   /** IIE decides. Every path ends the dispute, and either refunds the buyer or pays the seller (or both, partly). */
   async decide(
     principal: Principal,
     iieId: string,
-    input: { decision: DisputeDecision; refundAmount?: string; returnRequired: boolean; returnInstructions?: string; note: string },
+    input: { decision: DisputeDecision; refundAmount?: string; returnRequired: boolean; returnInstructions?: string; note: string; shippingBorneBy?: ShippingBearer },
     meta: RequestMeta,
   ) {
     const t = await this.loadTransaction(iieId);
@@ -103,6 +138,11 @@ export class DisputesService {
     if (!d || d.status !== 'OPEN' || t.status !== 'DISPUTED') throw Errors.conflict('DISPUTE_CLOSED', 'This dispute is not open');
     const [currency] = await this.db.select().from(currencies).where(eq(currencies.code, t.transactionCurrency));
     const refundMinor = input.decision === 'PARTIAL_REFUND' ? parseDecimalToMinor(input.refundAmount!, currency!.minorUnit) : input.decision === 'FULL_REFUND' ? t.totalMinor : null;
+    // Disputes open only after delivery, so on a full refund the carrier is still owed: IIE says who pays it.
+    const shippingBorneBy = input.decision === 'FULL_REFUND' && t.shippingMinor > 0n ? input.shippingBorneBy : undefined;
+    if (input.decision === 'FULL_REFUND' && t.shippingMinor > 0n && !shippingBorneBy) {
+      throw Errors.badRequest('SHIPPING_BEARER_REQUIRED', 'Choose who pays the carrier\'s shipping charge: the seller or IIE');
+    }
     const admin = { type: 'ADMIN' as const, userId: principal.userId };
     const reason = `IIE decision on the reported problem: ${input.note}`;
 
@@ -111,6 +151,7 @@ export class DisputesService {
       if (input.decision === 'FULL_REFUND') {
         // Goods stay with the buyer unless a return is required; any returned stock is put back by the seller.
         await this.payments.refundInFull(tx, locked!, reason, 'ADMIN', { restock: false });
+        if (shippingBorneBy) await this.payments.bearShipping(tx, locked!, shippingBorneBy);
         await this.engine.transition(tx, t.id, 'REFUNDED', admin, { reason, set: { reviewEndsAt: null } });
       } else {
         if (input.decision === 'PARTIAL_REFUND') {
@@ -129,12 +170,13 @@ export class DisputesService {
           returnRequired: input.returnRequired,
           returnInstructions: input.returnRequired ? input.returnInstructions! : null,
           decisionNote: input.note,
+          shippingBorneBy: shippingBorneBy ?? null,
           decidedBy: principal.userId,
           decidedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(disputes.id, d.id));
-      await tx.insert(disputeMessages).values({ disputeId: d.id, authorUserId: principal.userId, authorRole: 'IIE', body: this.decisionText(input, refundMinor, currency!) });
+      await tx.insert(disputeMessages).values({ disputeId: d.id, authorUserId: principal.userId, authorRole: 'IIE', body: this.decisionText({ ...input, shippingBorneBy }, refundMinor, t.shippingMinor, currency!) });
       await this.audit.record(tx, meta, { action: 'dispute.decided', entityType: 'dispute', entityId: d.id, before: { status: 'OPEN' }, after: { ...input, refundMinor: refundMinor?.toString() ?? null } });
     });
     return this.view(principal, iieId);
@@ -157,6 +199,15 @@ export class DisputesService {
       )
       .orderBy(desc(disputes.createdAt))
       .limit(200);
+    const ids = rows.map((r) => r.d.id);
+    const last = ids.length
+      ? await this.db
+          .selectDistinctOn([disputeMessages.disputeId], { disputeId: disputeMessages.disputeId, role: disputeMessages.authorRole })
+          .from(disputeMessages)
+          .where(inArray(disputeMessages.disputeId, ids))
+          .orderBy(disputeMessages.disputeId, desc(disputeMessages.id))
+      : [];
+    const lastAuthor = new Map(last.map((l) => [l.disputeId, l.role]));
     return {
       items: rows.map((r) => ({
         iieId: r.t.iieId,
@@ -166,6 +217,8 @@ export class DisputesService {
         total: toMoneyDto(r.t.totalMinor, r.currency),
         openedAt: r.d.createdAt,
         decidedAt: r.d.decidedAt,
+        // The buyer or seller wrote last: IIE owes a reply.
+        awaitingIie: r.d.status === 'OPEN' && lastAuthor.get(r.d.id) !== 'IIE',
       })),
     };
   }
@@ -182,6 +235,7 @@ export class DisputesService {
       refundAmount: d.refundAmountMinor != null ? toMoneyDto(d.refundAmountMinor, currency!) : null,
       returnRequired: d.returnRequired,
       returnInstructions: d.returnInstructions,
+      shippingBorneBy: d.shippingBorneBy,
       decisionNote: d.decisionNote,
       decidedAt: d.decidedAt,
     };
@@ -196,7 +250,7 @@ export class DisputesService {
       .select({ m: disputeMessages, firstName: users.firstName })
       .from(disputeMessages)
       .innerJoin(users, eq(users.id, disputeMessages.authorUserId))
-      .where(eq(disputeMessages.disputeId, d.id))
+      .where(and(eq(disputeMessages.disputeId, d.id), role === 'IIE' ? undefined : inArray(disputeMessages.visibleTo, [role, 'BOTH'])))
       .orderBy(asc(disputeMessages.id));
     const [payout] = await this.db.select().from(payouts).where(eq(payouts.transactionId, t.id));
     const [currency] = await this.db.select().from(currencies).where(eq(currencies.code, t.transactionCurrency));
@@ -213,17 +267,25 @@ export class DisputesService {
       // IIE needs these limits to decide; the buyer and seller see the outcome instead.
       ...(role === 'IIE' ? { limits: { total: toMoneyDto(t.totalMinor, currency!), maxPartialRefund: payout ? toMoneyDto(payout.amountMinor, currency!) : null } } : {}),
       messages: rows.map((r) => ({
+        id: r.m.id.toString(),
         role: r.m.authorRole,
         // Staff names stay private; buyer and seller see "IIE".
         author: r.m.authorRole === 'IIE' ? 'IIE' : r.firstName,
         body: r.m.body,
         photoUrl: r.m.mediaId ? `/api/v1/media/${r.m.mediaId}` : null,
         at: r.m.createdAt,
+        // IIE sees who each of its messages went to.
+        ...(role === 'IIE' ? { visibleTo: r.m.visibleTo } : {}),
       })),
     };
   }
 
-  private decisionText(input: { decision: DisputeDecision; returnRequired: boolean; returnInstructions?: string; note: string }, refundMinor: bigint | null, currency: typeof currencies.$inferSelect) {
+  private decisionText(
+    input: { decision: DisputeDecision; returnRequired: boolean; returnInstructions?: string; note: string; shippingBorneBy?: ShippingBearer },
+    refundMinor: bigint | null,
+    shippingMinor: bigint,
+    currency: typeof currencies.$inferSelect,
+  ) {
     const amount = refundMinor != null ? toMoneyDto(refundMinor, currency).formatted : '';
     const outcome =
       input.decision === 'FULL_REFUND'
@@ -232,7 +294,10 @@ export class DisputesService {
           ? `Decision: partial refund of ${amount} to the buyer; the rest of the payout goes to the seller.`
           : 'Decision: the payout is released to the seller.';
     const goods = input.returnRequired ? ` The goods must be returned: ${input.returnInstructions}` : ' The buyer keeps the goods.';
-    return `${outcome}${goods} ${input.note}`;
+    const shipping = input.shippingBorneBy
+      ? ` The carrier's shipping charge of ${toMoneyDto(shippingMinor, currency).formatted} is paid by ${input.shippingBorneBy === 'SELLER' ? 'the seller (kept back from their next payouts)' : 'IIE'}.`
+      : '';
+    return `${outcome}${goods}${shipping} ${input.note}`;
   }
 
   private async roleOf(principal: Principal, t: TransactionRow): Promise<Role | null> {

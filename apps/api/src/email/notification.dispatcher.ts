@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { EMAIL_PROVIDER, EmailProvider } from './email.provider';
 import { templates } from './templates';
+import { weeklyReport } from './weekly-report.template';
+import type { WeeklyFigures } from '../reports/reports.service';
 
 /** Outbox event types that produce notifications. */
 export const EVENTS = {
@@ -24,6 +26,7 @@ export const EVENTS = {
   partnerInvited: 'partner.member_invited',
   partnerMemberAdded: 'partner.member_added',
   partnerUpdate: 'partner.update',
+  weeklyReport: 'report.weekly',
 } as const;
 
 const SELLER_EVENTS: Record<string, 'approved' | 'rejected' | 'changes_requested' | 'activated' | 'suspended'> = {
@@ -88,6 +91,8 @@ export class NotificationDispatcher {
         return this.email.send(templates.partnerMemberAdded(to.email, to.firstName, to.partnerName!, `${web}/partner`));
       case EVENTS.partnerUpdate:
         return this.email.send(templates.partnerUpdate(to.email, to.firstName, to.subject!, to.message!, `${web}${to.path}`));
+      case EVENTS.weeklyReport:
+        return this.email.send(weeklyReport(to.email, to.firstName, (payload as { figures: WeeklyFigures }).figures, `${web}/admin/reports`));
       case EVENTS.accountSuspended:
         return this.email.send(templates.accountSuspended(to.email, to.firstName));
       default:

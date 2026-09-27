@@ -1,10 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { Database, DB, Tx } from '../db/db';
 import { ledgerEntries, transactions } from '../db/schema';
 
-export type LedgerAccount = 'provider_held' | 'seller_payable' | 'iie_fee_revenue' | 'logistics_payable';
+export type LedgerAccount =
+  | 'provider_held'
+  | 'seller_payable'
+  | 'iie_fee_revenue'
+  | 'logistics_payable'
+  // Phase 7: settlement and shipping on refunds
+  | 'iie_cash'
+  | 'iie_shipping_expense'
+  | 'seller_receivable';
 interface Line {
   account: LedgerAccount;
   direction: 'DEBIT' | 'CREDIT';
@@ -68,6 +76,47 @@ export class LedgerService {
       { account: 'seller_payable', direction: 'DEBIT', amountMinor },
       { account: 'provider_held', direction: 'CREDIT', amountMinor },
     ]);
+  }
+
+  /**
+   * After a full refund of a delivered order the carrier is still owed its charge: IIE bears it as an expense, or the
+   * seller owes it to IIE (recovered from later payouts).
+   */
+  shippingBorne(tx: Tx, t: TransactionRow, bearer: 'IIE' | 'SELLER') {
+    return this.post(tx, t.id, t.transactionCurrency, `Shipping for refunded ${t.iieId} borne by ${bearer === 'IIE' ? 'IIE' : 'the seller'}`, [
+      { account: bearer === 'IIE' ? 'iie_shipping_expense' : 'seller_receivable', direction: 'DEBIT', amountMinor: t.shippingMinor },
+      { account: 'logistics_payable', direction: 'CREDIT', amountMinor: t.shippingMinor },
+    ]);
+  }
+
+  /** Part of a payout kept back to settle what the seller owes IIE. */
+  recoverFromPayout(tx: Tx, t: TransactionRow, amountMinor: bigint, description: string) {
+    return this.post(tx, t.id, t.transactionCurrency, description, [
+      { account: 'seller_payable', direction: 'DEBIT', amountMinor },
+      { account: 'seller_receivable', direction: 'CREDIT', amountMinor },
+    ]);
+  }
+
+  /** The provider remits IIE's share (fee and shipping) for a transaction. */
+  remittanceReceived(tx: Tx, t: TransactionRow, amountMinor: bigint) {
+    return this.post(tx, t.id, t.transactionCurrency, `Provider remittance for ${t.iieId}`, [
+      { account: 'iie_cash', direction: 'DEBIT', amountMinor },
+      { account: 'provider_held', direction: 'CREDIT', amountMinor },
+    ]);
+  }
+
+  /** IIE pays the logistics partner for a transaction's shipping. */
+  logisticsPaid(tx: Tx, t: TransactionRow, amountMinor: bigint) {
+    return this.post(tx, t.id, t.transactionCurrency, `Logistics partner paid for ${t.iieId}`, [
+      { account: 'logistics_payable', direction: 'DEBIT', amountMinor },
+      { account: 'iie_cash', direction: 'CREDIT', amountMinor },
+    ]);
+  }
+
+  /** Current balance of one account for a transaction (debits minus credits). */
+  async balance(tx: Tx, transactionId: string, account: LedgerAccount): Promise<bigint> {
+    const rows = await tx.select().from(ledgerEntries).where(and(eq(ledgerEntries.transactionId, transactionId), eq(ledgerEntries.account, account)));
+    return rows.reduce((sum, r) => sum + (r.direction === 'DEBIT' ? r.amountMinor : -r.amountMinor), 0n);
   }
 
   async entries(transactionId: string) {

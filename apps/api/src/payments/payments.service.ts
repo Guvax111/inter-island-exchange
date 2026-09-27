@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
-import { SELLER_CONFIRMATION_HOURS, type TransactionStatus } from '@iie/shared';
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { SELLER_CONFIRMATION_HOURS, type ShippingBearer, type TransactionStatus } from '@iie/shared';
 import { APP_CONFIG, AppConfig } from '../config/config';
 import { Database, DB, Tx } from '../db/db';
 import {
@@ -12,6 +12,7 @@ import {
   payouts,
   providerWebhooks,
   refunds,
+  sellerCharges,
   sellerProfiles,
   transactions,
 } from '../db/schema';
@@ -20,6 +21,7 @@ import type { RequestMeta } from '../common/request';
 import { AuditService } from '../audit/audit.service';
 import type { Principal } from '../rbac/principal';
 import { TransactionEngine, type Actor } from '../transactions/transaction-engine';
+import { SettlementsService } from '../settlements/settlements.service';
 import { LedgerService } from './ledger.service';
 import { PAYMENT_PROVIDER, PaymentProvider, ProviderEvent } from './payment.provider';
 
@@ -36,6 +38,7 @@ export class PaymentsService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly engine: TransactionEngine,
     private readonly ledger: LedgerService,
+    private readonly settlements: SettlementsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -260,6 +263,25 @@ export class PaymentsService {
   }
 
   /**
+   * After a full refund of a delivered order the carrier's charge is still owed. IIE bears it, or the seller does:
+   * then it is kept back from the seller's next payouts.
+   */
+  async bearShipping(tx: Tx, t: TransactionRow, bearer: ShippingBearer) {
+    await this.ledger.shippingBorne(tx, t, bearer);
+    if (bearer === 'SELLER') {
+      await tx.insert(sellerCharges).values({
+        sellerProfileId: t.sellerProfileId,
+        transactionId: t.id,
+        kind: 'SHIPPING_AFTER_REFUND',
+        amountMinor: t.shippingMinor,
+        remainingMinor: t.shippingMinor,
+        currencyCode: t.transactionCurrency,
+        note: `Carrier shipping for ${t.iieId}, refunded in full`,
+      });
+    }
+  }
+
+  /**
    * Part of the payment back to the buyer (e.g. one item missing). Borne by the seller: at most the seller's payout,
    * which is reduced by the same amount.
    */
@@ -308,7 +330,9 @@ export class PaymentsService {
       throw Errors.conflict('PAYOUT_NOT_RELEASABLE', 'This payout cannot be released now');
     }
     const [seller] = await tx.select().from(sellerProfiles).where(eq(sellerProfiles.id, payout.sellerProfileId));
-    await tx.update(payouts).set({ status: 'APPROVED', updatedAt: new Date() }).where(eq(payouts.id, payout.id));
+    // First release only (a retried payout has already been reduced): keep back what the seller owes IIE.
+    if (payout.status === 'ON_HOLD') payout.amountMinor -= await this.recoverSellerCharges(tx, t, payout);
+    await tx.update(payouts).set({ status: 'APPROVED', amountMinor: payout.amountMinor, updatedAt: new Date() }).where(eq(payouts.id, payout.id));
     await this.engine.transition(tx, t.id, 'PAYOUT_PROCESSING', { type: 'SYSTEM' }, { reason: 'Payout sent to the payment provider' });
     if (payout.amountMinor === 0n) {
       await this.completePayout(tx, t.id, payout.id, null);
@@ -325,10 +349,39 @@ export class PaymentsService {
     if (result.status === 'SUCCEEDED') await this.completePayout(tx, t.id, payout.id, result.providerPayoutId);
   }
 
+  /**
+   * Oldest charges first (e.g. shipping on an earlier full refund the seller bears), in the payout's currency, up to
+   * the payout amount. The kept-back amount stays with the provider and reaches IIE in its remittance.
+   */
+  private async recoverSellerCharges(tx: Tx, t: TransactionRow, payout: typeof payouts.$inferSelect): Promise<bigint> {
+    const open = await tx
+      .select()
+      .from(sellerCharges)
+      .where(and(eq(sellerCharges.sellerProfileId, payout.sellerProfileId), eq(sellerCharges.status, 'OUTSTANDING'), eq(sellerCharges.currencyCode, payout.currencyCode)))
+      .orderBy(asc(sellerCharges.createdAt))
+      .for('update');
+    let available = payout.amountMinor;
+    let recovered = 0n;
+    for (const charge of open) {
+      if (available <= 0n) break;
+      const take = charge.remainingMinor < available ? charge.remainingMinor : available;
+      const [from] = await tx.select({ iieId: transactions.iieId }).from(transactions).where(eq(transactions.id, charge.transactionId));
+      await this.ledger.recoverFromPayout(tx, t, take, `Kept back from ${t.iieId} payout: ${charge.kind === 'SHIPPING_AFTER_REFUND' ? 'shipping' : charge.kind} for ${from!.iieId}`);
+      const remaining = charge.remainingMinor - take;
+      await tx.update(sellerCharges).set({ remainingMinor: remaining, status: remaining === 0n ? 'RECOVERED' : 'OUTSTANDING', updatedAt: new Date() }).where(eq(sellerCharges.id, charge.id));
+      available -= take;
+      recovered += take;
+    }
+    if (recovered > 0n) await tx.update(payouts).set({ deductedMinor: payout.deductedMinor + recovered }).where(eq(payouts.id, payout.id));
+    return recovered;
+  }
+
   private async completePayout(tx: Tx, transactionId: string, payoutId: string, providerPayoutId: string | null) {
     const [payout] = await tx.update(payouts).set({ status: 'PAID', releasedAt: new Date(), updatedAt: new Date() }).where(eq(payouts.id, payoutId)).returning();
     const [t] = await tx.select().from(transactions).where(eq(transactions.id, transactionId));
     if (payout!.amountMinor > 0n) await this.ledger.payout(tx, t!, payout!.amountMinor);
+    // What the provider still holds (fee, shipping, anything kept back) is IIE's, remitted net 30.
+    await this.settlements.remittanceDue(tx, t!);
     await this.engine.transition(tx, transactionId, 'COMPLETED', { type: 'PAYMENT' }, {
       reason: 'Seller paid',
       metadata: { providerPayoutId, amountMinor: payout!.amountMinor.toString() },

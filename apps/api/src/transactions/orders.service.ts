@@ -25,6 +25,7 @@ import { STATUS_LABELS } from './state-machine';
 import { TransactionEngine } from './transaction-engine';
 import { ShipmentsService } from '../logistics/shipments.service';
 import { DisputesService } from '../disputes/disputes.service';
+import { REVIEWABLE, ReviewsService } from '../reviews/reviews.service';
 
 type TransactionRow = typeof transactions.$inferSelect;
 type View = 'BUYER' | 'SELLER' | 'ADMIN';
@@ -39,6 +40,7 @@ export class OrdersService {
     private readonly audit: AuditService,
     private readonly shipments: ShipmentsService,
     private readonly disputes: DisputesService,
+    private readonly reviews: ReviewsService,
   ) {}
 
   // ------------------------------------------------------------------ reads
@@ -216,6 +218,8 @@ export class OrdersService {
       canReportProblem: view === 'BUYER' && ['DELIVERED', 'DISPUTE_WINDOW'].includes(t.status),
       reviewEndsAt: t.status === 'DISPUTE_WINDOW' ? t.reviewEndsAt : null,
       dispute: await this.disputes.summaryFor(t),
+      review: view === 'BUYER' ? await this.reviews.forOrder(t.id) : undefined,
+      canReview: view === 'BUYER' && REVIEWABLE.includes(t.status as TransactionStatus) && !(await this.reviews.forOrder(t.id)),
       ...(view !== 'BUYER' ? { payout: await this.payoutView(t, currency!) } : {}),
       seller: { name: store?.displayName, slug: store?.slug },
       buyer: view === 'SELLER' ? { firstName: buyer!.firstName } : buyer,

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import request from 'supertest';
-import { deliveryProofs, shipmentEvents, shipments, transactions, userRoles } from '../src/db/schema';
+import { deliveryProofs, settlements, shipmentEvents, shipments, transactions, userRoles } from '../src/db/schema';
 import { ShipmentsService } from '../src/logistics/shipments.service';
 import {
   Client,
@@ -146,6 +146,12 @@ describe('pilot shipment: St. Lucia -> St. Vincent', () => {
     const t = await status(iieId);
     expect(t.status).toBe('DELIVERED');
     expect(t.deliveryConfirmDueAt!.getTime() - Date.now()).toBeGreaterThan(2.99 * DAY);
+    // IIE now owes the carrier the shipping charge, net 45 days from delivery.
+    const [owed] = await ctx.db.select().from(settlements).where(eq(settlements.transactionId, t.id));
+    expect(owed).toMatchObject({ kind: 'LOGISTICS_PAYMENT', amountMinor: t.shippingMinor, status: 'DUE', partnerId: expect.any(String) });
+    expect(owed!.dueAt.getTime() - new Date(deliveredAt).getTime()).toBe(45 * DAY);
+    const listed = (await admin.get('/admin/settlements?kind=LOGISTICS_PAYMENT')).body.items.find((x: { iieId: string }) => x.iieId === iieId);
+    expect(listed).toMatchObject({ direction: 'PAYABLE', counterparty: 'Test Island Freight' });
 
     // The buyer sees the journey, customs' assessment and the proof, and confirms.
     const order = (await buyer.client.get(`/me/orders/${iieId}`)).body;

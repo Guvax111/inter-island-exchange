@@ -3,6 +3,7 @@ import { PERMISSIONS, ROLE_DEFINITIONS, ROLES } from '@iie/shared';
 import { createDatabase, Database } from './db';
 import { categories, countries, currencies, dutyEstimates, exchangeRates, feeRules, hsCodes, laneShippingRates, lanes, permissions, rolePermissions, roles } from './schema';
 import { SEED_CATEGORIES, SEED_COUNTRIES, SEED_CURRENCIES, SEED_ORIGIN_COUNTRIES, SEED_DUTY_ESTIMATES, SEED_EXCHANGE_RATES, SEED_FEE_RULE, SEED_HS_CODES, SEED_LANES, SEED_SHIPPING_RATES } from './seed-data';
+import { seedHelpDrafts } from '../help/help.service';
 
 /** Makes the roles/permissions tables match the catalogue in @iie/shared. */
 export async function syncRbac(db: Database): Promise<void> {
@@ -61,6 +62,7 @@ export async function seedReferenceData(db: Database): Promise<void> {
       .onConflictDoNothing();
   }
   await seedCheckoutConfig(db);
+  await seedHelpDrafts(db);
   await syncRbac(db);
 }
 

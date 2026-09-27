@@ -41,7 +41,15 @@ export class DisputesController {
   @HttpCode(200)
   @UseInterceptors(EVIDENCE_UPLOAD)
   message(@CurrentPrincipal() p: Principal, @Param('iieId') iieId: string, @Body() body: DisputeMessageDto, @UploadedFile() photo: Express.Multer.File | undefined, @Req() req: Request) {
-    return this.disputes.message(p, iieId, body.body, photo, requestMeta(req));
+    return this.disputes.message(p, iieId, body, photo, requestMeta(req));
+  }
+
+  /** IIE passes a buyer's or seller's message and photo on to the other side. */
+  @RequirePermissions('dispute.resolve')
+  @Post('admin/disputes/:iieId/messages/:messageId/share')
+  @HttpCode(200)
+  share(@CurrentPrincipal() p: Principal, @Param('iieId') iieId: string, @Param('messageId') messageId: string, @Req() req: Request) {
+    return this.disputes.share(p, iieId, messageId, requestMeta(req));
   }
 
   @RequirePermissions('transaction.read.any')

@@ -1,6 +1,14 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import {
+  helpArticleSchema,
+  helpArticleUpdateSchema,
+  reportRecipientSchema,
+  reviewModerationSchema,
+  reviewSchema,
+  settlementPaidSchema,
+  supportMessageSchema,
+  supportThreadSchema,
   addressCreateSchema,
   declineSaleSchema,
   exchangeRateSchema,
@@ -152,3 +160,11 @@ export class SellerDocumentReviewDto extends createZodDto(sellerDocumentReviewSc
 export class TariffImportDto extends createZodDto(tariffImportSchema) {}
 export class TariffLookupDto extends createZodDto(tariffLookupSchema) {}
 export class TariffSearchDto extends createZodDto(tariffSearchSchema) {}
+export class SettlementPaidDto extends createZodDto(settlementPaidSchema) {}
+export class ReportRecipientDto extends createZodDto(reportRecipientSchema) {}
+export class ReviewDto extends createZodDto(reviewSchema) {}
+export class ReviewModerationDto extends createZodDto(reviewModerationSchema) {}
+export class SupportThreadDto extends createZodDto(supportThreadSchema) {}
+export class SupportMessageDto extends createZodDto(supportMessageSchema) {}
+export class HelpArticleDto extends createZodDto(helpArticleSchema) {}
+export class HelpArticleUpdateDto extends createZodDto(helpArticleUpdateSchema) {}

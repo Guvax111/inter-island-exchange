@@ -56,6 +56,16 @@ import { DisputesController } from './disputes/disputes.controllers';
 import { ShipmentsService } from './logistics/shipments.service';
 import { AdminLogisticsController, BuyerDeliveryController, CountryPartnersController, PartnerPortalController, SellerShipmentController } from './logistics/logistics.controllers';
 import { LedgerService } from './payments/ledger.service';
+import { SettlementsService } from './settlements/settlements.service';
+import { AdminSettlementsController } from './settlements/settlements.controllers';
+import { SupportService } from './support/support.service';
+import { ReviewsService } from './reviews/reviews.service';
+import { HelpService } from './help/help.service';
+import { ReportsService } from './reports/reports.service';
+import { AdminReportsController } from './reports/reports.controllers';
+import { AdminHelpController, HelpController } from './help/help.controllers';
+import { AdminReviewsController, BuyerReviewsController } from './reviews/reviews.controllers';
+import { AdminSupportController, SupportController } from './support/support.controllers';
 import { FxService } from './payments/fx.service';
 import { AdminPaymentsController, PaymentActionsController, PaymentWebhooksController, SandboxPaymentController, SellerPayoutsController } from './payments/payments.controllers';
 import { HttpExceptionFilter } from './common/http-exception.filter';
@@ -132,6 +142,14 @@ export class AppModule {
         TariffsController,
         AdminTariffsController,
         SellerDocumentsController,
+        AdminSettlementsController,
+        SupportController,
+        AdminSupportController,
+        BuyerReviewsController,
+        AdminReviewsController,
+        HelpController,
+        AdminHelpController,
+        AdminReportsController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -178,6 +196,11 @@ export class AppModule {
         SellerDocumentsService,
         LedgerService,
         FxService,
+        SettlementsService,
+        SupportService,
+        ReviewsService,
+        HelpService,
+        ReportsService,
       ],
     };
   }

@@ -130,20 +130,21 @@ export class MediaService {
   }
 
   /** Dispute evidence: the buyer, the seller and IIE staff for either country. */
+  /** Dispute photos: IIE staff for either country, and the buyer or seller only on messages addressed to them. */
   private async canSeeDisputeEvidence(mediaId: string, principal: Principal): Promise<boolean> {
-    const [row] = await this.db
-      .select({ buyer: transactions.buyerUserId, sellerUser: sellerProfiles.userId, origin: transactions.originCountryId, destination: transactions.destinationCountryId })
+    const rows = await this.db
+      .select({ visibleTo: disputeMessages.visibleTo, buyer: transactions.buyerUserId, sellerUser: sellerProfiles.userId, origin: transactions.originCountryId, destination: transactions.destinationCountryId })
       .from(disputeMessages)
       .innerJoin(disputes, eq(disputes.id, disputeMessages.disputeId))
       .innerJoin(transactions, eq(transactions.id, disputes.transactionId))
       .innerJoin(sellerProfiles, eq(sellerProfiles.id, transactions.sellerProfileId))
       .where(eq(disputeMessages.mediaId, mediaId));
-    if (!row) return false;
-    return (
-      row.buyer === principal.userId ||
-      row.sellerUser === principal.userId ||
-      principal.canInCountry('transaction.read.any', row.origin) ||
-      principal.canInCountry('transaction.read.any', row.destination)
+    return rows.some(
+      (row) =>
+        principal.canInCountry('transaction.read.any', row.origin) ||
+        principal.canInCountry('transaction.read.any', row.destination) ||
+        (row.buyer === principal.userId && row.visibleTo !== 'SELLER') ||
+        (row.sellerUser === principal.userId && row.visibleTo !== 'BUYER'),
     );
   }
 

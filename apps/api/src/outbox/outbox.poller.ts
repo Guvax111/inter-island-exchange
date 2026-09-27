@@ -4,6 +4,7 @@ import { OrdersService } from '../transactions/orders.service';
 import { PaymentsService } from '../payments/payments.service';
 import { ShipmentsService } from '../logistics/shipments.service';
 import { OutboxService } from './outbox.service';
+import { ReportsService } from '../reports/reports.service';
 
 /**
  * Background jobs run by the worker (or in-process locally): deliver outbox events and cancel orders whose
@@ -22,6 +23,7 @@ export class OutboxPoller implements OnApplicationShutdown {
     private readonly orders: OrdersService,
     private readonly payments: PaymentsService,
     private readonly shipments: ShipmentsService,
+    private readonly reports: ReportsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -31,6 +33,7 @@ export class OutboxPoller implements OnApplicationShutdown {
     await this.payments.refundUnconfirmed();
     await this.shipments.autoConfirmDeliveries();
     await this.payments.releaseDuePayouts();
+    await this.reports.sendWeeklyIfDue();
     while ((await this.outbox.processBatch()) > 0) {
       // keep draining while there is work
     }

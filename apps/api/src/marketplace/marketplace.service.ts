@@ -10,6 +10,7 @@ import { ProductsService } from '../catalog/products.service';
 import { PUBLIC_PRODUCT_JOINS, publicProductWhere, publicSellerWhere } from '../catalog/visibility';
 import { PRODUCT_SEARCH, ProductSearchProvider } from './search.provider';
 import { TariffsService } from '../tariffs/tariffs.service';
+import { ReviewsService } from '../reviews/reviews.service';
 
 @Injectable()
 export class MarketplaceService {
@@ -19,6 +20,7 @@ export class MarketplaceService {
     private readonly categories: CategoriesService,
     private readonly products: ProductsService,
     private readonly tariffs: TariffsService,
+    private readonly reviews: ReviewsService,
   ) {}
 
   async search(input: ProductSearchInput) {
@@ -72,7 +74,10 @@ export class MarketplaceService {
       variants: detail.variants
         .filter((v) => !v.archived)
         .map((v) => ({ id: v.id, sku: v.sku, name: v.name, price: v.price, available: Math.max(0, v.quantityOnHand - v.quantityReserved) })),
-      seller: this.sellerCard(row.storefront!, row.country),
+      seller: { ...this.sellerCard(row.storefront!, row.country), rating: await this.reviews.sellerRating(row.product.sellerProfileId) },
+      // Published reviews of orders that included this product (IIE approves every review first).
+      rating: await this.reviews.productRating(detail.id),
+      reviews: await this.reviews.published({ productId: detail.id }, 10),
       shipsFrom: { code: row.country.isoAlpha2, name: row.country.name },
       shipsTo: destinations,
       // Import information for each country the product can be shipped to, from IIE's tariff schedules.
@@ -105,9 +110,10 @@ export class MarketplaceService {
       storePolicies: row.storefront.storePolicies,
       categories: productCategories,
       memberSince: row.seller.payoutSetupConfirmedAt ?? row.seller.createdAt,
-      // Ratings and completed-transaction counts arrive with orders (Phase 3) and reviews (Phase 7).
-      rating: null,
-      completedTransactions: null,
+      // Published reviews only: IIE approves every review first.
+      rating: await this.reviews.sellerRating(row.seller.id),
+      reviews: await this.reviews.published({ sellerProfileId: row.seller.id }, 20),
+      completedTransactions: await this.reviews.completedOrders(row.seller.id),
       shipsTo: await this.destinationsFrom(row.country.id),
     };
   }

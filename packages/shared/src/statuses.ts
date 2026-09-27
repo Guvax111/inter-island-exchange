@@ -124,3 +124,17 @@ export type SellerDocumentType = (typeof SELLER_DOCUMENT_TYPES)[number];
 /** Import restrictions carried by a tariff line. */
 export const TARIFF_RESTRICTIONS = ['NONE', 'LICENCE_REQUIRED', 'PROHIBITED'] as const;
 export type TariffRestriction = (typeof TARIFF_RESTRICTIONS)[number];
+
+// ------------------------------------------------------------------ Phase 7: settlement, reports, reviews, messaging, help
+
+/** Days after a seller payout within which the payment provider remits IIE's share (fee and shipping). */
+export const PROVIDER_REMITTANCE_DAYS = 30;
+/** Days after delivery within which IIE pays the logistics partner. */
+export const LOGISTICS_PAYMENT_DAYS = 45;
+
+/** Who covers the carrier's charge when a delivered order is refunded in full. */
+export const SHIPPING_BEARERS = ['SELLER', 'IIE'] as const;
+export type ShippingBearer = (typeof SHIPPING_BEARERS)[number];
+
+export const HELP_AUDIENCES = ['BUYER', 'SELLER', 'PARTNER', 'ALL'] as const;
+export type HelpAudience = (typeof HELP_AUDIENCES)[number];

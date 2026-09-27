@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ACCOUNT_STATUSES, ACCOUNT_TYPES, DISPUTE_DECISIONS, FEE_PAYERS, MAX_CART_QUANTITY, PARTNER_KINDS, PARTY_TYPES, PRODUCT_STATUSES, SELLER_DOCUMENT_TYPES, TRANSACTION_STATUSES } from './statuses';
+import { ACCOUNT_STATUSES, ACCOUNT_TYPES, DISPUTE_DECISIONS, HELP_AUDIENCES, SHIPPING_BEARERS, FEE_PAYERS, MAX_CART_QUANTITY, PARTNER_KINDS, PARTY_TYPES, PRODUCT_STATUSES, SELLER_DOCUMENT_TYPES, TRANSACTION_STATUSES } from './statuses';
 import { ROLES } from './rbac';
 
 export const PASSWORD_MIN_LENGTH = 12;
@@ -407,7 +407,11 @@ export const reportProblemSchema = z.object({ reason: z.string().trim().min(10).
 
 // ------------------------------------------------------------------ Phase 6: disputes, payouts, verification, tariffs
 
-export const disputeMessageSchema = z.object({ body: z.string().trim().min(2).max(2000) });
+export const disputeMessageSchema = z.object({
+  body: z.string().trim().min(2).max(2000),
+  /** IIE staff only: who sees the message. Buyer and seller messages are seen by IIE only (never by each other). */
+  audience: z.enum(['BUYER', 'SELLER', 'BOTH']).optional(),
+});
 
 export const disputeDecisionSchema = z
   .object({
@@ -419,6 +423,8 @@ export const disputeDecisionSchema = z
     returnInstructions: z.string().trim().max(1000).optional(),
     /** Explanation shown to the buyer and the seller. */
     note: z.string().trim().min(10).max(2000),
+    /** FULL_REFUND after delivery: who covers the carrier's shipping charge (still owed to the logistics partner). */
+    shippingBorneBy: z.enum(SHIPPING_BEARERS).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.decision === 'PARTIAL_REFUND' && !v.refundAmount) ctx.addIssue({ code: 'custom', path: ['refundAmount'], message: 'Enter the amount to refund' });
@@ -457,3 +463,48 @@ export const tariffImportSchema = z.object({
   /** Duty for goods of CARICOM origin when the file has no such column (CARICOM free circulation). */
   caricomDefaultPercent: z.coerce.number().min(0).max(100).default(0),
 });
+
+// ------------------------------------------------------------------ Phase 7
+
+export const settlementPaidSchema = z.object({ reference: z.string().trim().min(2).max(120), paidOn: z.iso.date().optional() });
+export const reportRecipientSchema = z.object({ email: emailSchema, name: z.string().trim().min(1).max(120) });
+
+export const reviewSchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5),
+  title: z.string().trim().max(120).optional(),
+  body: z.string().trim().max(2000).optional(),
+});
+export const reviewModerationSchema = z
+  .object({ decision: z.enum(['PUBLISH', 'REJECT']), note: z.string().trim().max(500).optional() })
+  .superRefine((v, ctx) => {
+    if (v.decision === 'REJECT' && !v.note) ctx.addIssue({ code: 'custom', path: ['note'], message: 'Tell the buyer why the review was not published' });
+  });
+
+export const supportThreadSchema = z.object({
+  subject: z.string().trim().min(3).max(150),
+  body: z.string().trim().min(2).max(4000),
+  /** Optional order the question is about. */
+  iieId: z.string().trim().max(40).optional(),
+});
+export const supportMessageSchema = z.object({ body: z.string().trim().min(2).max(4000) });
+
+export const helpArticleSchema = z.object({
+  slug: slugSchema,
+  title: z.string().trim().min(3).max(150),
+  audience: z.enum(HELP_AUDIENCES),
+  summary: z.string().trim().max(300).default(''),
+  /** Simple Markdown: headings (##), paragraphs, lists (-, 1.), **bold**, [links](/path). */
+  body: z.string().trim().min(10).max(30000),
+  sortOrder: z.coerce.number().int().min(0).max(1000).default(100),
+});
+// Explicit fields without defaults: zod's partial() would still fill in defaults and overwrite stored values.
+export const helpArticleUpdateSchema = z
+  .object({
+    slug: slugSchema,
+    title: z.string().trim().min(3).max(150),
+    audience: z.enum(HELP_AUDIENCES),
+    summary: z.string().trim().max(300),
+    body: z.string().trim().min(10).max(30000),
+    sortOrder: z.coerce.number().int().min(0).max(1000),
+  })
+  .partial();

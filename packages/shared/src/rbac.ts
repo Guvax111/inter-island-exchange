@@ -40,6 +40,10 @@ export const PERMISSIONS = [
   'category.manage',
   'partner.manage',
   'dispute.resolve',
+  'support.respond',
+  'review.moderate',
+  'content.manage',
+  'report.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -79,7 +83,11 @@ export const ROLE_DEFINITIONS: Record<Role, { name: string; description: string;
   freight_consolidator: { name: 'Freight Consolidator', description: 'Consolidates and ships regional freight', permissions: [...OWN_ACCOUNT, ...LOGISTICS] },
   customs_broker: { name: 'Customs Broker', description: 'Handles customs documentation and clearance', permissions: [...OWN_ACCOUNT, 'shipment.read.assigned', 'customs.document.manage'] },
   payment_partner: { name: 'Payment Partner', description: 'Licensed payment provider staff (reconciliation)', permissions: [...OWN_ACCOUNT, 'payment.reconcile.assigned'] },
-  customer_support: { name: 'Customer Support', description: 'Helps users; read-only access to accounts and transactions', permissions: [...OWN_ACCOUNT, 'user.read.any', 'transaction.read.any'] },
+  customer_support: {
+    name: 'Customer Support',
+    description: 'Helps users: answers messages, moderates reviews, maintains help articles; read-only access to accounts and transactions',
+    permissions: [...OWN_ACCOUNT, 'user.read.any', 'transaction.read.any', 'support.respond', 'review.moderate', 'content.manage'],
+  },
   compliance_officer: {
     name: 'Compliance Officer',
     description: 'Reviews KYC, sellers and suspicious activity',
