@@ -1,6 +1,6 @@
 # IIE Payment Architecture
 
-**Status:** Phases 4 and 6. Built against a **sandbox provider** until a licensed payment, banking or escrow provider is
+**Status:** Phases 4, 6 and 7. Built against a **sandbox provider** until a licensed payment, banking or escrow provider is
 contracted. No real money moves.
 
 ## Principles
@@ -94,6 +94,9 @@ Double-entry, per transaction, in the transaction currency (minor units). Accoun
 | `seller_payable` | Owed to the seller when the transaction completes |
 | `iie_fee_revenue` | IIE platform fee |
 | `logistics_payable` | Owed to the logistics partner for shipping |
+| `seller_receivable` | Owed to IIE by the seller (e.g. shipping on a full refund the seller bears) — Phase 7 |
+| `iie_shipping_expense` | Shipping IIE bears on a full refund — Phase 7 |
+| `iie_cash` | Money IIE has received from the provider or paid to partners — Phase 7 |
 
 Capture: `provider_held` Dr total = `seller_payable` Cr payout + `iie_fee_revenue` Cr fee + `logistics_payable` Cr shipping.
 A full refund posts the exact reverse, so every account nets to zero.
@@ -130,7 +133,11 @@ settles at once the transaction completes; otherwise it stays `PAYOUT_PROCESSING
 `payout.failed` webhook. A failed payout can be retried by IIE (*Admin → Payouts → Retry*, `payout.approve`).
 
 Ledger at payout: `seller_payable` Dr / `provider_held` Cr (payout amount). The IIE fee and the shipping stay in
-`provider_held` until settled with the provider and the logistics partner (settlement recording is Phase 7).
+`provider_held` until the provider remits them to IIE (see [Settlements](#settlements-phase-7)).
+
+**Amounts the seller owes IIE** (seller charges, e.g. shipping on a full refund the seller bears) are kept back from
+the seller's next payouts, oldest first, when a payout is first released: `seller_payable` Dr / `seller_receivable` Cr.
+The payout is reduced by that amount (`payouts.deducted_minor`) and the seller sees it on their Payouts page.
 
 Payouts run on the **sandbox provider** (no real money) until a licensed provider is contracted.
 
@@ -148,8 +155,34 @@ IIE exchange messages with photo evidence. IIE (`dispute.resolve`) decides:
 Refund rows use their id as the provider idempotency key. The decision, amount, return instructions and explanation are
 recorded on the dispute, posted to the conversation, audited and emailed to both parties.
 
-**Open point:** after a full refund of a delivered order, the carrier's shipping charge is still owed to the logistics
-partner; who bears it (seller, IIE) is a business decision to make before launch.
+**Shipping on a full refund (Phase 7).** Disputes open only after delivery, so the carrier is still owed its charge.
+IIE must choose who pays it when deciding a full refund (`shippingBorneBy`, required):
+
+| Bearer | Ledger | Effect |
+|---|---|---|
+| Seller | `seller_receivable` Dr / `logistics_payable` Cr | A seller charge, kept back from the seller's next payouts |
+| IIE | `iie_shipping_expense` Dr / `logistics_payable` Cr | IIE's cost |
+
+Either way IIE pays the carrier on the normal terms (net 45 from delivery).
+
+**Messaging.** Buyer and seller write to IIE only and see only messages addressed to them; IIE chooses who sees each of
+its messages and can share a party's message and photo with the other side.
+
+## Settlements (Phase 7)
+
+What IIE is owed and owes per transaction (`settlements`):
+
+| Kind | Created | Amount | Due | Recorded as paid |
+|---|---|---|---|---|
+| `PROVIDER_REMITTANCE` (provider → IIE) | When the seller payout completes | Everything the provider still holds for the order: IIE fee, shipping, and anything kept back from the seller | **30 days** after the payout | `iie_cash` Dr / `provider_held` Cr |
+| `LOGISTICS_PAYMENT` (IIE → logistics partner) | When the partner records delivery | The order's shipping charge | **45 days** after delivery | `logistics_payable` Dr / `iie_cash` Cr |
+
+*Admin → Settlements* (`payout.approve`) lists what is due, overdue and settled; IIE records each payment with its bank
+or provider reference and date (audited). When both are settled, every account for the order nets to zero except IIE's
+fee revenue and cash. The weekly directors' report shows what is overdue and due in the next 14 days.
+
+Assumption to confirm with the provider: it remits IIE's share per transaction (the settlement rows can be grouped when
+its statements arrive in batches).
 
 ## Exchange rates
 
@@ -168,6 +201,8 @@ USD→BBD 2.00. A live rate feed can be added behind `FxService`.
 | `refunds` | Refund requests: amount, reason, requested by, provider refund ID, status | Status updates only |
 | `payouts` | Seller payout per transaction: amount, status | Status updates only |
 | `ledger_entries` | Double-entry lines grouped by posting | Append-only, balanced |
+| `seller_charges` | Amounts a seller owes IIE, with what remains to recover | Remaining reduced as recovered |
+| `settlements` | Provider remittances and partner payments per transaction | Paid once, with a reference |
 | `exchange_rates` | Rates with source and effective time | Append-only |
 
 ## API
@@ -180,7 +215,10 @@ USD→BBD 2.00. A live rate feed can be added behind `FxService`.
 | `POST /webhooks/payments/{provider}` | Provider | Signed events |
 | `GET/POST /sandbox-pay/{id}` | Tester (sandbox only) | Sandbox hosted page |
 | `GET /admin/transactions/{iieId}/money` | `transaction.read.any` (country-scoped) | Payments, refunds, ledger and balances |
-| `GET /admin/payouts` | `payout.approve` | Payouts |
+| `GET /admin/payouts` | `payout.approve` | Payouts (with amounts kept back) |
+| `GET /admin/settlements?status=&kind=&overdue=` | `payout.approve` | Settlements |
+| `POST /admin/settlements/{id}/paid` `{reference, paidOn?}` | `payout.approve` | Record a remittance received or a partner payment |
+| `GET /me/payouts` | Seller | Payouts and amounts owed to IIE (`charges`) |
 | `GET/POST /admin/exchange-rates` | `config.manage` | Exchange rates |
 
 ## Adding the contracted provider

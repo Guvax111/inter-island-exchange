@@ -99,3 +99,9 @@ When the file arrives: open *Admin → Tariffs*, give it its official name and p
 countries it covers (if it has a single rate column), and import it. Check the summary and first lines, then activate.
 If its layout is not recognised, the error says which column is missing; the header names can be adjusted in the file
 (e.g. rename "Rate %" to "Rate of Duty").
+
+**Status (Phase 7):** the file IIE attached has not reached this workspace, and the CARICOM page IIE pointed to
+(<https://caricom.org/documents/harmonized-commodity-description-and-coding-system-hs/>) is blocked by the workspace's
+network policy. No official data has been loaded or typed in by hand. When either is available: import it as a draft,
+check the summary (including restricted and prohibited lines), and activate it only after IIE confirms. If the CARICOM
+publication is a PDF, its tables must first be converted to Excel (see *Importing a file*).

@@ -573,7 +573,7 @@ Details: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md) (payouts, 
 6. **Business Solutions:** business buyer accounts (invoices, purchase order numbers) and bulk listing for sellers.
 7. **Admin tools:** exports (CSV) for transactions, payouts, disputes; user impersonation for support (audited, read-only).
 
-### Decisions requested before Phase 7
+### Decisions requested before Phase 7 (answered 2026-09-27, see below)
 
 - **Reports:** which figures IIE's directors want to see first, and how often (daily/weekly email?).
 - **Reviews:** may buyers leave written reviews, or ratings only? Does IIE moderate before publishing?
@@ -581,3 +581,86 @@ Details: [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md) (payouts, 
 - **Help Center:** who writes the content (IIE staff, or drafts from us for approval)?
 - **Fee and shipping settlement:** how the provider pays IIE its fee, and how IIE pays the logistics partner (per order,
   weekly, monthly).
+
+### Decisions (2026-09-27)
+
+| Question | Decision |
+|---|---|
+| Shipping on a full refund of a delivered order | The carrier is still owed. IIE chooses per case: the **seller** pays (kept back from their next payouts) or **IIE** pays |
+| Reports | A **weekly email** to IIE's directors first |
+| Reviews | Ratings **and** written reviews; **IIE approves** each one before it is published |
+| Messaging | Buyers and sellers communicate **only through IIE** |
+| Help Center | Written by IIE staff, starting from drafts we prepare |
+| Settlement | The payment provider pays IIE its share **net 30 days**; IIE pays the logistics partner **net 45 days** |
+| HS file | To import IIE's file covering all goods, including restricted goods; otherwise the CARICOM HS page |
+
+## Phase 7 result
+
+**Delivered:**
+
+1. **Shipping on full refunds.** When IIE decides a full refund after delivery it must choose who pays the carrier. IIE's
+   share is booked as an expense; a seller's share becomes a *seller charge*, kept back (oldest first) from the seller's
+   next payouts and shown on their Payouts page.
+2. **Settlements.** Each delivery creates what IIE owes the logistics partner (due 45 days after delivery); each seller
+   payout creates what the provider owes IIE — everything it still holds for the order: fee, shipping and anything
+   kept back (due 30 days after the payout). *Admin → Settlements* lists what is due and overdue; recording a
+   payment with its bank or provider reference posts it to the ledger. See [`IIE_PAYMENT_ARCHITECTURE.md`](IIE_PAYMENT_ARCHITECTURE.md#settlements-phase-7).
+3. **Directors' weekly email.** Every Monday at 08:00 St. Vincent time, for the week just ended: orders, money per
+   currency (gross sales, IIE fees, refunds, seller payouts), what is owed between IIE and its partners, disputes,
+   growth, what is waiting on IIE, and trade lanes. *Admin → Reports* previews any week, sends on demand, manages
+   recipients and keeps a history. Sent once per week however many workers run.
+4. **Reviews.** Buyers rate an order (1–5, optional title and text) once delivery is confirmed. Nothing is public until
+   IIE publishes it (*Admin → Reviews*); a declined review tells the buyer why. Product pages and storefronts show the
+   average, count and reviews (first name, initial and country).
+5. **Messaging only through IIE.** In a dispute, buyer and seller each write to IIE and see only what is addressed to
+   them; IIE chooses the audience of each message and can pass on a party's message and photo. For everything else,
+   *Messages* is a conversation with IIE (*Admin → Messages* for staff). Messages cannot be edited or deleted.
+6. **Help Center.** Public `/help` with search and topics; *Admin → Help Center* to write, preview, publish and
+   unpublish. 15 draft articles (buyers, sellers, partners, everyone) are seeded **as drafts** for IIE to check; points
+   needing a business answer are marked "[IIE to confirm]".
+
+**Tests:** 141 API tests (10 new: shipping bearer, recovery from payouts, remittance and partner settlements,
+IIE-routed dispute messages and evidence sharing, support conversations, reviews and moderation, Help Center, weekly
+report timing and idempotency), 6 shared tests, and the end-to-end browser test, which now also covers the routed dispute
+conversation, recording the provider's remittance, a review from submission to the product page, a support
+conversation, publishing a Help article, and sending the weekly report.
+
+| Planned | Delivered instead | Why |
+|---|---|---|
+| Dashboards for IIE, sellers and partners | Directors' weekly report (email and admin page) | The directors asked for a weekly email first |
+| Buyer–seller messaging, moderated | All messages go to IIE; IIE relays | Decision: communication only through IIE |
+| Partner statements, provider reconciliation | Settlement per transaction with due dates and references | Statements follow once a partner and provider are contracted |
+| Business Solutions, CSV exports, support impersonation | Not built | No decisions yet; moved to Phase 8 |
+
+**Still open:**
+
+- **IIE's HS file** has not arrived (attachments do not reach this workspace) and `caricom.org` is blocked by this
+  workspace's network policy, so **no official tariff data is loaded**; the platform still uses IIE's labelled
+  estimates. Once the file or the site is available it is imported as a draft, checked, and activated only after IIE
+  confirms.
+- The Help Center drafts need IIE's review before publishing.
+- Directors' email addresses need to be added under *Admin → Reports*.
+
+---
+
+## Phase 8 plan — Launch readiness
+
+### What will be built
+
+1. **Contracted providers:** the licensed payment provider's adapter (payments, refunds, payouts, webhooks) and the
+   logistics partner onboarding, replacing the sandbox for production; provider reconciliation against settlements.
+2. **Security review:** external penetration test; nonce-based Content-Security-Policy; error monitoring
+   (Sentry/OpenTelemetry); shared rate limiting (Redis) for more than one API instance; S3-compatible storage.
+3. **Operations:** production deployment in St. Vincent, backups with restore drills, uptime alerts, runbooks.
+4. **Admin tools:** CSV exports (transactions, payouts, settlements, disputes); audit log scoped by country.
+5. **Business Solutions** (if IIE decides the scope): business buyer accounts with invoices and PO numbers, bulk listing.
+6. **Pilot launch:** the St. Lucia diaper seller and St. Vincent buyers on production, with real money only after the
+   provider's and IIE's legal sign-off.
+
+### Decisions requested before Phase 8
+
+- **Payment provider and logistics partner:** which ones are contracted, and their sandbox credentials.
+- **Launch date** and the first sellers and buyers invited.
+- **Business Solutions:** build now or after the pilot?
+- **Support hours** and response times to publish in the Help Center.
+

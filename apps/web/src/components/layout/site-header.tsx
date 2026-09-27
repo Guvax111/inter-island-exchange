@@ -26,7 +26,7 @@ export function SiteHeader() {
     refetchInterval: 60_000,
     queryFn: () => api<NotificationList>('/me/notifications'),
   });
-  const ADMIN_PERMISSIONS = ['user.read.any', 'country.manage', 'seller.review', 'product.review', 'transaction.read.any'];
+  const ADMIN_PERMISSIONS = ['user.read.any', 'country.manage', 'seller.review', 'product.review', 'transaction.read.any', 'support.respond', 'review.moderate', 'content.manage', 'report.read'];
   const isAdmin = ADMIN_PERMISSIONS.some((p) => me?.permissions.includes(p));
   const isPartner = !!me?.permissions.includes('shipment.read.assigned');
   const dashboard = me?.roles.includes('seller') ? '/dashboard/seller' : me?.roles.includes('buyer') ? '/dashboard/buyer' : null;
@@ -74,6 +74,9 @@ export function SiteHeader() {
           <Link href="/admin">Admin</Link>
         </Button>
       )}
+      <Button asChild variant="ghost" size="sm">
+        <Link href="/messages">Messages</Link>
+      </Button>
       <Button asChild variant="outline" size="sm">
         <Link href="/account">My account</Link>
       </Button>

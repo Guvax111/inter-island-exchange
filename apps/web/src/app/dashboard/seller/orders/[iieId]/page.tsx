@@ -79,6 +79,12 @@ export default function SellerOrderPage() {
         <p className="text-muted-foreground">
           {order.buyer.firstName} in {order.deliveryAddress.city}, {order.deliveryAddress.country}
         </p>
+        <p className="mt-1 text-sm">
+          Questions about this order go through IIE:{' '}
+          <Link href={`/messages/new?order=${order.iieId}`} className="underline">
+            message IIE
+          </Link>
+        </p>
       </div>
       <div className="rounded-lg border-l-4 border-ocean-600 bg-ocean-50 p-4" role="status">
         <p className="font-semibold">{order.statusLabel}</p>

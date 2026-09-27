@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { api, errorMessage } from '@/lib/api';
 import type { Money } from '@/lib/types';
 
-interface Payout { iieId: string; seller: string; status: string; amount: Money; createdAt: string }
+interface Payout { iieId: string; seller: string; status: string; amount: Money; deducted: Money | null; createdAt: string }
 
 const FILTERS = ['', 'ON_HOLD', 'PROCESSING', 'PAID', 'FAILED', 'CANCELLED'];
 
@@ -63,7 +63,10 @@ export default function AdminPayoutsPage() {
                     </Button>
                   )}
                 </TableCell>
-                <TableCell className="text-right">{p.amount.formatted}</TableCell>
+                <TableCell className="text-right">
+                  {p.amount.formatted}
+                  {p.deducted && <span className="block text-xs text-muted-foreground">{p.deducted.formatted} kept back (owed to IIE)</span>}
+                </TableCell>
               </TableRow>
             ))}
             {data?.items.length === 0 && (

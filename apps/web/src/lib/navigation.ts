@@ -27,12 +27,11 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: 'Payment & Transaction Security', href: '/payment-security', status: 'live' },
   { label: 'Duties & Tariffs', href: '/tariffs', status: 'live' },
   { label: 'Business Solutions', href: '/business-solutions', status: 'coming-soon' },
-  { label: 'Help Center', href: '/help', status: 'coming-soon' },
+  { label: 'Help Center', href: '/help', status: 'live' },
   { label: 'About IIE', href: '/about', status: 'live' },
   { label: 'Contact', href: '/contact', status: 'live' },
 ];
 
 export const COMING_SOON: Record<string, { title: string; phase: string; summary: string }> = {
-  'business-solutions': { title: 'Business Solutions', phase: 'Phase 7', summary: 'Tools for business buyers and sellers trading at volume.' },
-  help: { title: 'Help Center', phase: 'Phase 7', summary: 'Guides and answers for buyers, sellers and partners.' },
+  'business-solutions': { title: 'Business Solutions', phase: 'a later phase', summary: 'Tools for business buyers and sellers trading at volume.' },
 };

@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { BadgeCheck, Truck } from 'lucide-react';
 import { AddToCart } from '@/components/marketplace/add-to-cart';
 import { TariffCard, formatHs } from '@/components/tariffs/tariff-card';
+import { RatingSummary } from '@/components/reviews/stars';
+import { ReviewList } from '@/components/reviews/review-list';
 import { serverGet } from '@/lib/server-api';
 import type { PublicProduct } from '@/lib/types';
 
@@ -61,9 +63,19 @@ export default async function ProductPage({ params }: Props) {
           <div>
             <h1 className="text-2xl font-bold text-ocean-900 md:text-3xl">{product.title}</h1>
             <p className="mt-2 text-muted-foreground">{product.shortDescription}</p>
+            <p className="mt-2 text-sm">
+              <a href="#reviews" className="hover:underline">
+                <RatingSummary rating={product.rating} />
+              </a>
+            </p>
             <Link href={`/seller/${product.seller.slug}`} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-ocean-700 underline">
               <BadgeCheck className="h-4 w-4" aria-hidden /> {product.seller.name}, {product.seller.countryName}
             </Link>
+            {product.seller.rating && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Seller rating {product.seller.rating.average.toFixed(1)} / 5 from {product.seller.rating.count} {product.seller.rating.count === 1 ? 'review' : 'reviews'}
+              </p>
+            )}
           </div>
           <AddToCart product={product} />
           <div className="flex gap-2 rounded-lg bg-muted p-3 text-sm">
@@ -113,6 +125,13 @@ export default async function ProductPage({ params }: Props) {
           )}
         </div>
       </div>
+      <section id="reviews" className="mt-10 max-w-3xl scroll-mt-24">
+        <h2 className="text-lg font-semibold">Reviews</h2>
+        <p className="mt-1 text-sm text-muted-foreground">From buyers who ordered this product. IIE checks every review before it is published.</p>
+        <div className="mt-2">
+          <ReviewList reviews={product.reviews} />
+        </div>
+      </section>
     </section>
   );
 }

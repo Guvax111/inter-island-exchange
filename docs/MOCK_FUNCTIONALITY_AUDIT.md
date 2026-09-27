@@ -15,8 +15,8 @@ Status after Phase 6. Every control below is clearly labelled; none pretends to 
 |---|---|---|---|---|---|
 | 1 | Header/footer, `/marketplace` | `PRIMARY_NAV` | — | — | **Done (Phase 2):** real search over approved products |
 | 2 | `/logistics` | Logistics page | — (no partner selected yet) | Select the SLU → SVG partner | **Done (Phase 5):** explains the shipping journey; states **Partner to be announced** and that shipping prices are provisional |
-| 3 | `/business-solutions` | `ComingSoon` | No business tools yet | Business buyer/seller features | Labelled **Coming soon** (Phase 7) |
-| 4 | `/help` | `ComingSoon` | No help content | Write help center | Labelled **Coming soon** (Phase 7) |
+| 3 | `/business-solutions` | `ComingSoon` | No business tools yet | Business buyer/seller features | Labelled **Coming soon** (awaiting IIE's decision; Phase 8) |
+| 4 | `/help` | Help Center | — | — | **Resolved in Phase 7:** real articles managed by IIE staff; until IIE publishes the drafts, the page says articles are being prepared and links to *Message IIE* |
 | 5 | `/contact` | Contact page | — | — | **Done:** IIE's address, email and phone (also in the footer) |
 | 6 | Home, `/track` | "Track a Shipment" card | — | — | **Done (Phase 5):** signed-in buyers track by IIE transaction ID; guests are asked to sign in (tracking shows addresses and proof of delivery) |
 | 7 | Home | "Shop the Marketplace" card | — | — | **Done (Phase 2)** |

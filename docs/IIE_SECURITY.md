@@ -36,6 +36,17 @@
 | Search | Free text is reduced to letters and digits before building the query, so it cannot inject query syntax; parameterised SQL | `marketplace/search.provider.ts`; search test |
 | Cart | Server checks visibility, stock, trade lane and own-product rules on every add; cart holds quantities only, never prices | `cart.service.ts`; cart tests |
 
+## Added in Phase 7
+
+- **No direct buyer–seller contact:** dispute messages are filtered on the server by `visible_to`; a party's photo is
+  served to the other party only after IIE shares it. Support conversations are visible to their user and to staff with
+  `support.respond` for that user's country; staff names are never shown to users. Messages are append-only.
+- **Reviews** are never public before IIE approves them; public reviews show first name, initial and country only.
+- **Help articles** are rendered from a small Markdown subset into React elements (no raw HTML); links may only point
+  to IIE pages or `https` sites.
+- **New permissions:** `support.respond`, `review.moderate`, `content.manage` (Customer Support), `report.read`
+  (Super Administrator). Settlements need `payout.approve`; report recipients need `config.manage`. Every action is audited.
+
 ## Added in Phase 6
 
 | Area | Control | Where / test |
@@ -110,8 +121,8 @@ Never commit `.env` files (`.gitignore` blocks them). `.env.example` documents e
 | No Content-Security-Policy yet | Nonce-based CSP in Phase 8 |
 | `ACCOUNT_LOCKED` and `MFA_REQUIRED` reveal that an account exists or that a password was right | Accepted for usability; revisit in the Phase 8 review |
 | Phone verification (SMS) not implemented | SMS provider abstraction, Phase 3 |
-| Country-scoped audit reading | Phase 7 |
+| Country-scoped audit reading | Phase 8 |
 | Object storage adapter (S3-compatible) not built; `local` disk storage is refused in production | Build with the hosting decision (D4), before staging with real sellers |
 | Image virus scanning | Images are fully decoded and re-encoded (which removes embedded payloads); add scanning when non-image documents arrive (Phase 5 customs documents) |
-| Deletion requests are recorded but processed manually | Phase 7 workflow with legal retention rules |
+| Deletion requests are recorded but processed manually | Phase 8 workflow with legal retention rules |
 | No error-monitoring service wired up | Sentry/OpenTelemetry in Phase 8 (logs include request IDs meanwhile) |

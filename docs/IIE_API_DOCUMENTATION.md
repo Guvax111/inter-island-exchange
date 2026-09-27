@@ -221,6 +221,26 @@ Public product detail adds `importInfo[]` (per destination: tariff resolution). 
 `tariff`. Order detail adds `canReportProblem`, `reviewEndsAt`, `dispute`, and for sellers/IIE `payout`. Checkout error
 `NOT_IMPORTABLE` for goods the destination prohibits.
 
+## Endpoints (Phase 7 — settlement, reviews, messaging, help, reports)
+
+| Method and path | Who | Purpose |
+|---|---|---|
+| `POST /admin/disputes/{iieId}/decision` | `dispute.resolve` | Now requires `shippingBorneBy` (`SELLER` or `IIE`) for a full refund |
+| `POST /disputes/{iieId}/messages` | Parties, IIE | Buyer and seller messages go to IIE only; IIE may set `audience` (`BUYER`, `SELLER`, `BOTH`) |
+| `POST /admin/disputes/{iieId}/messages/{messageId}/share` | `dispute.resolve` | Pass a party's message and photo to the other side |
+| `GET /admin/settlements` · `POST /admin/settlements/{id}/paid` | `payout.approve` | Settlements (see payment architecture) |
+| `POST /me/orders/{iieId}/review` `{rating, title?, body?}` | Buyer | Review a delivered order (once); pending until IIE approves |
+| `GET /admin/reviews?status=` · `POST /admin/reviews/{id}/moderate` `{decision, note?}` | `review.moderate` | Moderation queue; a rejection needs a reason |
+| `GET/POST /me/messages` · `GET /me/messages/{id}` · `POST /me/messages/{id}/messages` | Signed-in user | Conversations with IIE (`iieId` optional, must be the user's order) |
+| `GET /admin/support?status=&waiting=` · `GET /admin/support/{id}` · `POST …/messages` · `…/close` · `…/reopen` | `support.respond` | IIE's inbox, scoped to the staff member's countries |
+| `GET /help?audience=&q=` · `GET /help/{slug}` | Public | Published articles; full-text search |
+| `GET/POST /admin/help` · `GET/PATCH /admin/help/{id}` · `POST …/publish` · `…/unpublish` | `content.manage` | Help Center editing |
+| `GET /admin/reports/weekly?weekOf=` · `POST /admin/reports/weekly/send` · `GET /admin/reports/runs` · `GET /admin/reports/recipients` | `report.read` | Directors' report |
+| `POST /admin/reports/recipients` · `POST /admin/reports/recipients/{id}/enable|disable` | `config.manage` | Recipients |
+
+Product pages (`GET /products/{id}`) add `rating` and `reviews`, and the seller's `rating`; storefronts
+(`GET /sellers/{slug}`) add `rating`, `reviews` and `completedTransactions`. Order views add `review` and `canReview`.
+
 ### Health
 
 `GET /health` (public) → `{ status: "ok" }` after a database round trip.

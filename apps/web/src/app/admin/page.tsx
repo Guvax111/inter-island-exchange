@@ -10,6 +10,10 @@ const ORDER: [string, string][] = [
   ['product.review', '/admin/products'],
   ['user.read.any', '/admin/users'],
   ['country.manage', '/admin/countries'],
+  ['support.respond', '/admin/support'],
+  ['review.moderate', '/admin/reviews'],
+  ['content.manage', '/admin/help'],
+  ['report.read', '/admin/reports'],
 ];
 
 /** Opens the first admin section the user can use (review queues first). */

@@ -22,7 +22,11 @@ A secure digital marketplace and trade platform connecting buyers and sellers ac
   schedules per CARICOM country (import from CSV/Excel) shown to sellers and buyers and used for duty estimates.
 
 Staging is hosted in St. Vincent and the Grenadines: see [`docs/IIE_DEPLOYMENT.md`](docs/IIE_DEPLOYMENT.md).
-Phase 7 (administration, analytics, settlement) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
+- **Phase 7:** who pays the carrier on a full refund (seller or IIE); settlements (provider pays IIE net 30, IIE pays the
+  logistics partner net 45); directors' weekly email; reviews approved by IIE before publishing; messaging only through
+  IIE; Help Center with draft articles for IIE to review.
+
+Phase 8 (launch readiness) is planned in the [roadmap](docs/IIE_DEVELOPMENT_ROADMAP.md).
 
 **Contact:** Inter-Island Exchange, Inc. · Arnos Vale, St. Vincent and the Grenadines · info@interislandexchange.com · (347) 497-3977
 

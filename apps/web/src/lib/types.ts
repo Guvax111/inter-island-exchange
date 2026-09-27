@@ -55,7 +55,9 @@ export interface PublicProduct {
   images: { id: string; url: string; altText: string }[];
   inStock: boolean;
   variants: { id: string; sku: string; name: string; price: Money; available: number }[];
-  seller: SellerCard;
+  seller: SellerCard & { rating: Rating | null };
+  rating: Rating | null;
+  reviews: PublicReview[];
   shipsFrom: { code: string; name: string };
   shipsTo: { code: string; name: string }[];
 }
@@ -67,7 +69,8 @@ export interface Storefront extends SellerCard {
   storePolicies: string;
   categories: { slug: string; name: string }[];
   memberSince: string;
-  rating: number | null;
+  rating: Rating | null;
+  reviews: PublicReview[];
   completedTransactions: number | null;
   shipsTo: { code: string; name: string }[];
 }
@@ -177,6 +180,8 @@ export interface OrderDetail {
   canReportProblem: boolean;
   reviewEndsAt: string | null;
   dispute: DisputeSummary | null;
+  review?: OwnReview | null;
+  canReview: boolean;
   payout?: { status: string; amount: Money; paidAt: string | null; providerReference: string | null } | null;
   shipment: ShipmentView | null;
   seller: { name: string; slug: string };
@@ -307,6 +312,8 @@ export interface DisputeSummary {
   returnInstructions: string | null;
   decisionNote: string | null;
   decidedAt: string | null;
+  /** Full refund after delivery: who pays the carrier's shipping charge. */
+  shippingBorneBy: 'SELLER' | 'IIE' | null;
 }
 
 export interface DisputeView extends Omit<DisputeSummary, 'status'> {
@@ -317,8 +324,9 @@ export interface DisputeView extends Omit<DisputeSummary, 'status'> {
   yourRole: 'BUYER' | 'SELLER' | 'IIE';
   canMessage: boolean;
   openedAt: string;
-  limits?: { total: Money; maxPartialRefund: Money | null };
-  messages: { role: 'BUYER' | 'SELLER' | 'IIE'; author: string; body: string; photoUrl: string | null; at: string }[];
+  limits?: { total: Money; shipping: Money; maxPartialRefund: Money | null };
+  /** Buyer and seller see only messages addressed to them; IIE sees all, with `visibleTo`. */
+  messages: { id: string; role: 'BUYER' | 'SELLER' | 'IIE'; author: string; body: string; photoUrl: string | null; at: string; visibleTo?: 'BUYER' | 'SELLER' | 'BOTH' }[];
 }
 
 export const DECISION_LABELS: Record<NonNullable<DisputeSummary['decision']>, string> = {
@@ -343,3 +351,70 @@ export interface TariffResolution {
   varies: boolean;
   source: { kind: 'TARIFF_SCHEDULE'; name: string; publisher: string; effectiveFrom: string } | { kind: 'IIE_ESTIMATE'; name: string; isPlaceholder: boolean };
 }
+
+// ---------------------------------------------------------------- Phase 7
+
+export interface Rating {
+  average: number;
+  count: number;
+}
+
+export interface PublicReview {
+  rating: number;
+  title: string | null;
+  body: string | null;
+  reviewer: string;
+  reviewerCountry: string;
+  at: string;
+}
+
+export interface OwnReview {
+  rating: number;
+  title: string | null;
+  body: string | null;
+  status: 'PENDING' | 'PUBLISHED' | 'REJECTED';
+  moderationNote: string | null;
+  submittedAt: string;
+}
+
+export interface SupportThreadSummary {
+  id: string;
+  subject: string;
+  status: 'OPEN' | 'CLOSED';
+  iieId: string | null;
+  waitingFor: 'IIE' | 'USER';
+  lastMessageAt: string;
+  user?: { id: string; firstName: string; lastName: string; email: string };
+}
+
+export interface SupportThread extends SupportThreadSummary {
+  createdAt: string;
+  messages: { role: 'USER' | 'IIE'; author: string; body: string; at: string }[];
+}
+
+export interface HelpArticleSummary {
+  slug: string;
+  title: string;
+  audience: 'BUYER' | 'SELLER' | 'PARTNER' | 'ALL';
+  summary: string;
+}
+
+export interface HelpArticle extends HelpArticleSummary {
+  body: string;
+  updatedAt: string;
+}
+
+export interface AdminHelpArticle extends HelpArticle {
+  id: string;
+  sortOrder: number;
+  status: 'DRAFT' | 'PUBLISHED';
+  needsConfirmation: boolean;
+  publishedAt: string | null;
+}
+
+export const HELP_AUDIENCE_LABELS: Record<HelpArticleSummary['audience'], string> = {
+  BUYER: 'Buyers',
+  SELLER: 'Sellers',
+  PARTNER: 'Partners',
+  ALL: 'Everyone',
+};

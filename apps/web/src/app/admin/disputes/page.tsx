@@ -13,7 +13,7 @@ import { api, errorMessage } from '@/lib/api';
 import { DECISION_LABELS, type DisputeView, type Money } from '@/lib/types';
 import { useMe } from '@/lib/session';
 
-interface Row { iieId: string; status: string; decision: DisputeView['decision']; reason: string; total: Money; openedAt: string }
+interface Row { iieId: string; status: string; decision: DisputeView['decision']; reason: string; total: Money; openedAt: string; awaitingIie: boolean }
 
 export default function AdminDisputesPage() {
   const [status, setStatus] = useState<'OPEN' | 'ALL'>('OPEN');
@@ -37,7 +37,10 @@ export default function AdminDisputesPage() {
               <button onClick={() => setSelected(d.iieId)} className={`w-full p-3 text-left hover:bg-muted ${selected === d.iieId ? 'bg-muted' : ''}`}>
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-mono text-sm font-semibold">{d.iieId}</span>
-                  <Badge variant={d.status === 'OPEN' ? 'default' : 'secondary'}>{d.decision ? DECISION_LABELS[d.decision] : 'Open'}</Badge>
+                  <span className="flex gap-1">
+                    {d.awaitingIie && <Badge variant="outline">Needs reply</Badge>}
+                    <Badge variant={d.status === 'OPEN' ? 'default' : 'secondary'}>{d.decision ? DECISION_LABELS[d.decision] : 'Open'}</Badge>
+                  </span>
                 </span>
                 <span className="mt-1 block text-sm text-muted-foreground">
                   {d.reason.slice(0, 120)} · {d.total.formatted} · {new Date(d.openedAt).toLocaleDateString()}
@@ -67,6 +70,7 @@ function DecisionForm({ iieId }: { iieId: string }) {
   const [returnRequired, setReturnRequired] = useState(false);
   const [returnInstructions, setReturnInstructions] = useState('');
   const [note, setNote] = useState('');
+  const [shippingBorneBy, setShippingBorneBy] = useState<'SELLER' | 'IIE' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!d || d.disputeStatus !== 'OPEN') return null;
@@ -79,7 +83,14 @@ function DecisionForm({ iieId }: { iieId: string }) {
     try {
       const updated = await api<DisputeView>(`/admin/disputes/${iieId}/decision`, {
         method: 'POST',
-        body: { decision, refundAmount: decision === 'PARTIAL_REFUND' ? refundAmount : undefined, returnRequired, returnInstructions: returnRequired ? returnInstructions : undefined, note },
+        body: {
+          decision,
+          refundAmount: decision === 'PARTIAL_REFUND' ? refundAmount : undefined,
+          returnRequired,
+          returnInstructions: returnRequired ? returnInstructions : undefined,
+          note,
+          shippingBorneBy: decision === 'FULL_REFUND' ? (shippingBorneBy ?? undefined) : undefined,
+        },
       });
       qc.setQueryData(['dispute', iieId], updated);
       await qc.invalidateQueries({ queryKey: ['admin-disputes'] });
@@ -110,6 +121,21 @@ function DecisionForm({ iieId }: { iieId: string }) {
           <Input id="refund-amount" inputMode="decimal" placeholder="e.g. 22.50" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} required />
         </div>
       )}
+      {decision === 'FULL_REFUND' && (
+        <fieldset className="space-y-1">
+          <legend>
+            The carrier is still owed {d.limits?.shipping.formatted} for shipping. Who pays it?
+          </legend>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="shipping-bearer" checked={shippingBorneBy === 'SELLER'} onChange={() => setShippingBorneBy('SELLER')} />
+            The seller (kept back from their next payouts)
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="shipping-bearer" checked={shippingBorneBy === 'IIE'} onChange={() => setShippingBorneBy('IIE')} />
+            IIE
+          </label>
+        </fieldset>
+      )}
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={returnRequired} onChange={(e) => setReturnRequired(e.target.checked)} />
         The buyer must return the goods
@@ -124,7 +150,7 @@ function DecisionForm({ iieId }: { iieId: string }) {
         <Label htmlFor="decision-note">Explanation for the buyer and the seller</Label>
         <Textarea id="decision-note" value={note} onChange={(e) => setNote(e.target.value)} required minLength={10} maxLength={2000} />
       </div>
-      <Button type="submit" disabled={busy || note.trim().length < 10}>
+      <Button type="submit" disabled={busy || note.trim().length < 10 || (decision === 'FULL_REFUND' && !shippingBorneBy)}>
         {busy ? 'Recording…' : 'Record decision'}
       </Button>
       <FormError message={error} />

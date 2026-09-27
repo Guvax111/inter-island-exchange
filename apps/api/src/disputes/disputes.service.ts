@@ -265,7 +265,7 @@ export class DisputesService {
       canMessage: d.status === 'OPEN',
       openedAt: d.createdAt,
       // IIE needs these limits to decide; the buyer and seller see the outcome instead.
-      ...(role === 'IIE' ? { limits: { total: toMoneyDto(t.totalMinor, currency!), maxPartialRefund: payout ? toMoneyDto(payout.amountMinor, currency!) : null } } : {}),
+      ...(role === 'IIE' ? { limits: { total: toMoneyDto(t.totalMinor, currency!), shipping: toMoneyDto(t.shippingMinor, currency!), maxPartialRefund: payout ? toMoneyDto(payout.amountMinor, currency!) : null } } : {}),
       messages: rows.map((r) => ({
         id: r.m.id.toString(),
         role: r.m.authorRole,

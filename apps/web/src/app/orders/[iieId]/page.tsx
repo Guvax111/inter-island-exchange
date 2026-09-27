@@ -12,6 +12,7 @@ import { HoursCountdown } from '@/components/orders/countdown';
 import { PaymentCountdown } from '@/components/orders/payment-countdown';
 import { ShipmentPanel } from '@/components/orders/shipment-panel';
 import { DisputePanel } from '@/components/disputes/dispute-panel';
+import { ReviewPanel } from '@/components/reviews/review-panel';
 import { TariffLine } from '@/components/orders/tariff-line';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -82,6 +83,11 @@ function Order() {
         <p className="text-muted-foreground">
           From <Link href={`/seller/${order.seller.slug}`} className="underline">{order.seller.name}</Link> · placed {new Date(order.createdAt).toLocaleString()}
         </p>
+        <p className="mt-1 text-sm">
+          <Link href={`/messages/new?order=${order.iieId}`} className="underline">
+            Message IIE about this order
+          </Link>
+        </p>
       </div>
 
       <PaymentPanel order={order} returned={returned} paying={paying} onPay={pay} onCancel={cancel} error={error} />
@@ -97,6 +103,16 @@ function Order() {
               <OrderTimeline order={order} />
             </CardContent>
           </Card>
+          {(order.canReview || order.review) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">{order.review ? 'Your review' : 'Rate this order'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ReviewPanel order={order} onSaved={() => qc.invalidateQueries({ queryKey: ['order', iieId] })} />
+              </CardContent>
+            </Card>
+          )}
           {order.dispute && (
             <Card>
               <CardHeader>

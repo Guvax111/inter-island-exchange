@@ -3,6 +3,8 @@ import { BadgeCheck, MapPin } from 'lucide-react';
 import { Pagination } from '@/components/marketplace/pagination';
 import { ProductGrid } from '@/components/marketplace/product-card';
 import { SaveSellerButton } from '@/components/marketplace/save-seller';
+import { RatingSummary } from '@/components/reviews/stars';
+import { ReviewList } from '@/components/reviews/review-list';
 import { serverGet } from '@/lib/server-api';
 import type { SearchResult, Storefront } from '@/lib/types';
 
@@ -43,7 +45,10 @@ export default async function StorefrontPage({ params, searchParams }: Props) {
               <span className="inline-flex items-center gap-1 text-muted-foreground">
                 <MapPin className="h-4 w-4" aria-hidden /> Ships from {store.shippingOrigin}
               </span>
-              <span className="text-muted-foreground">{store.completedTransactions ? `${store.completedTransactions} completed orders` : 'New seller on IIE'}</span>
+              <RatingSummary rating={store.rating} empty="No reviews yet" />
+              <span className="text-muted-foreground">
+                {store.completedTransactions ? `${store.completedTransactions} completed ${store.completedTransactions === 1 ? 'order' : 'orders'}` : 'New seller on IIE'}
+              </span>
             </p>
           </div>
           <SaveSellerButton slug={store.slug} />
@@ -55,6 +60,9 @@ export default async function StorefrontPage({ params, searchParams }: Props) {
           <h2 className="mb-3 text-xl font-semibold">Products</h2>
           <ProductGrid products={products?.items ?? []} empty="This seller has no products listed yet." />
           {products && <Pagination page={products.page} pageSize={products.pageSize} total={products.total} params={{}} basePath={`/seller/${slug}`} />}
+          <h2 id="reviews" className="mb-1 mt-10 text-xl font-semibold">Reviews</h2>
+          <p className="text-sm text-muted-foreground">IIE checks every review before it is published.</p>
+          <ReviewList reviews={store.reviews} />
         </div>
         <aside className="space-y-4 text-sm">
           {store.categories.length > 0 && (

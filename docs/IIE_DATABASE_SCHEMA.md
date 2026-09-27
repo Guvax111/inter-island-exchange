@@ -144,9 +144,22 @@ users 1─N audit_logs (as actor)
 frozen tariff (`tariff_hs_code`, `tariff_description`, `duty_rate_bps`, `vat_rate_bps`, `tariff_source`);
 `media_assets.kind` adds `DISPUTE_EVIDENCE`. Countries with `regional_bloc = 'EXTRA_REGIONAL'` are origins only.
 
+## Phase 7 tables
+
+| Table | Purpose | Key columns / rules |
+|---|---|---|
+| `seller_charges` | What a seller owes IIE | `kind` (`SHIPPING_AFTER_REFUND`), `amount_minor`, `remaining_minor` (0 ≤ remaining ≤ amount), `status` (`OUTSTANDING`, `RECOVERED`) |
+| `settlements` | Provider remittance / partner payment per transaction | `kind` (`PROVIDER_REMITTANCE`, `LOGISTICS_PAYMENT`), unique per kind and transaction, `due_at`, `status` (`DUE`, `PAID`), `reference`, `recorded_by` |
+| `reviews` | Buyer's rating and review, one per transaction | `rating` 1–5, `title`, `body`, `status` (`PENDING`, `PUBLISHED`, `REJECTED`), `moderation_note`, `moderated_by/at` |
+| `support_threads`, `support_messages` | User ↔ IIE conversations | `last_author_role` drives "needs reply"; messages append-only (triggers) |
+| `help_articles` | Help Center | unique `slug`, `audience` (`BUYER`, `SELLER`, `PARTNER`, `ALL`), `status` (`DRAFT`, `PUBLISHED`); full-text index |
+| `report_recipients`, `report_runs` | Directors' weekly email | one `SCHEDULED` run per `week_start` (partial unique index); figures stored as sent |
+
+`payouts.deducted_minor` records what was kept back from a payout; `disputes.shipping_borne_by` (`SELLER`, `IIE`);
+`dispute_messages.visible_to` (`BUYER`, `SELLER`, `BOTH`).
+
 ## Planned tables (later phases)
 
 Designed in [`IIE_PLATFORM_ARCHITECTURE.md` §7](./IIE_PLATFORM_ARCHITECTURE.md#7-data-model-core-entities):
-restricted_product_rules (Phase 6);
 payout_accounts (with the licensed payment provider);
-messages, reviews, settlements (Phase 7).
+provider statements for reconciliation (Phase 8).

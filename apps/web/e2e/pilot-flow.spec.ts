@@ -338,14 +338,26 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   await buyerPage.getByLabel(/What went wrong/).fill('Only one of the two packs was in the box.');
   await buyerPage.getByRole('button', { name: 'Send report' }).click();
   await expect(buyerPage.getByText('Problem reported', { exact: true }).first()).toBeVisible();
+  await buyerPage.getByLabel(/Message to IIE/).fill('The box was taped shut when it arrived.');
+  await buyerPage.getByRole('button', { name: 'Send' }).click();
+  await expect(buyerPage.getByText('The box was taped shut when it arrived.')).toBeVisible();
   await sellerPage.reload();
   await expect(sellerPage.getByText('Problem reported by the buyer').first()).toBeVisible();
-  await sellerPage.getByLabel(/Add a message/).fill('We packed two; one may have been lost in transit. We accept a refund for one pack.');
+  // Buyers and sellers write to IIE only: neither sees the other's messages.
+  await sellerPage.getByLabel(/Message to IIE/).fill('We packed two; one may have been lost in transit. We accept a refund for one pack.');
   await sellerPage.getByRole('button', { name: 'Send' }).click();
   await expect(sellerPage.getByText(/We accept a refund for one pack/)).toBeVisible();
+  await expect(sellerPage.getByText('The box was taped shut when it arrived.')).toHaveCount(0);
   await adminPage.goto('/admin/disputes');
   await adminPage.getByRole('button', { name: new RegExp(iieId) }).click();
   await expect(adminPage.getByText(/We accept a refund for one pack/)).toBeVisible();
+  await expect(adminPage.getByText('Needs reply').first()).toBeVisible();
+  await adminPage.getByLabel('Message', { exact: true }).fill('The seller confirms one pack may have been lost. We are refunding it.');
+  await adminPage.getByRole('button', { name: 'Send' }).click();
+  await expect(adminPage.getByText(/to buyer and seller/)).toBeVisible();
+  await buyerPage.reload();
+  await expect(buyerPage.getByText('The seller confirms one pack may have been lost. We are refunding it.')).toBeVisible();
+  await expect(buyerPage.getByText(/We accept a refund for one pack/)).toHaveCount(0);
   await adminPage.getByLabel('Partial refund to the buyer').check();
   await adminPage.getByLabel('Refund amount').fill('45.00');
   await adminPage.getByLabel('Explanation for the buyer and the seller').fill('One of two packs did not arrive; refunding its price.');
@@ -361,4 +373,86 @@ test('pilot: St. Lucia seller lists diapers, St. Vincent buyer orders them', asy
   await expect(payout).toContainText('Paid');
   await expect(payout).toContainText('EC$45.00');
   await shot(sellerPage, 'p6-05-seller-payouts');
+
+  // ---- Phase 7: the provider owes IIE its share, net 30 after the payout; IIE records the remittance
+  await adminPage.goto('/admin/settlements');
+  await adminPage.getByRole('button', { name: 'Owed to IIE' }).click();
+  const remittance = adminPage.getByRole('row', { name: new RegExp(iieId) });
+  await expect(remittance).toContainText('Payment provider pays IIE');
+  await shot(adminPage, 'p7-01-admin-settlements');
+  await remittance.getByRole('button', { name: 'Record receipt' }).click();
+  await adminPage.getByLabel('Bank or provider reference').fill(`SBX-REMIT-${run}`);
+  await adminPage.getByRole('button', { name: 'Record', exact: true }).click();
+  await adminPage.getByRole('button', { name: 'Settled' }).click();
+  await expect(adminPage.getByRole('row', { name: new RegExp(iieId) })).toContainText(`SBX-REMIT-${run}`);
+
+  // ---- The buyer rates the order; IIE approves the review before it appears on the product page
+  await buyerPage.goto(`/orders/${iieId}`);
+  await buyerPage.getByLabel('4 stars').check({ force: true });
+  await buyerPage.getByLabel('Title (optional)').fill('Good diapers, one pack short');
+  await buyerPage.getByLabel('Your review (optional)').fill('IIE sorted out the missing pack quickly.');
+  await buyerPage.getByRole('button', { name: 'Submit review' }).click();
+  await expect(buyerPage.getByText('Waiting for IIE to check it before it is published.')).toBeVisible();
+  await adminPage.goto('/admin/reviews');
+  const pending = adminPage.getByRole('listitem').filter({ hasText: iieId });
+  await expect(pending).toContainText('Good diapers, one pack short');
+  await shot(adminPage, 'p7-02-admin-review-moderation');
+  await pending.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(pending).toHaveCount(0);
+  await buyerPage.goto(`/marketplace?q=${encodeURIComponent(productTitle)}`);
+  await buyerPage.getByRole('link', { name: productTitle }).first().click();
+  await buyerPage.waitForURL(/\/products\//);
+  // Product pages and their data are each cached for 30 seconds, so a new review can take about a minute to appear.
+  await expect(async () => {
+    await buyerPage.reload();
+    await expect(buyerPage.getByText('IIE sorted out the missing pack quickly.')).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 90_000 });
+  await expect(buyerPage.getByRole('img', { name: '4 out of 5 stars' }).first()).toBeVisible();
+  await shot(buyerPage, 'p7-03-product-reviews');
+
+  // ---- Messages go through IIE: the buyer writes, customer support answers
+  await buyerPage.goto(`/orders/${iieId}`);
+  await buyerPage.getByRole('link', { name: 'Message IIE about this order' }).click();
+  await buyerPage.getByLabel('Message').fill('Can the seller send the next order to Bequia?');
+  await buyerPage.getByRole('button', { name: 'Send to IIE' }).click();
+  await expect(buyerPage.getByText('Can the seller send the next order to Bequia?')).toBeVisible();
+  await adminPage.goto('/admin/support');
+  await adminPage.getByRole('button', { name: new RegExp(`About order ${iieId}`) }).click();
+  await adminPage.getByLabel('Reply to the user').fill('Yes: our partner delivers to Bequia. Choose your Bequia address at checkout.');
+  await adminPage.getByRole('button', { name: 'Send' }).click();
+  await buyerPage.reload();
+  await expect(buyerPage.getByText(/our partner delivers to Bequia/)).toBeVisible();
+  await shot(buyerPage, 'p7-04-buyer-messages-mobile');
+
+  // ---- Help Center: IIE staff publish an article; the public can find it
+  const slug = `pilot-help-${run}`;
+  await adminPage.goto('/admin/help');
+  await expect(adminPage.getByText('What is Inter-Island Exchange?')).toBeVisible();
+  await adminPage.getByRole('button', { name: 'New article' }).click();
+  await adminPage.getByLabel('Title').fill(`Pilot deliveries to St. Vincent ${run}`);
+  await adminPage.getByLabel('Web address (/help/…)').fill(slug);
+  await adminPage.getByLabel('For', { exact: true }).selectOption('BUYER');
+  await adminPage.getByLabel('Article').fill('## Where we deliver\n\nThe pilot delivers across **St. Vincent**. See [duties](/tariffs).\n\n- Kingstown\n- Bequia');
+  await adminPage.getByRole('button', { name: 'Create draft' }).click();
+  await adminPage.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(adminPage.getByRole('button', { name: 'Unpublish' })).toBeVisible();
+  await buyerPage.goto(`/help?q=${encodeURIComponent('Bequia pilot')}`);
+  await buyerPage.getByRole('link', { name: new RegExp(`Pilot deliveries to St. Vincent ${run}`) }).click();
+  await expect(buyerPage.getByRole('heading', { name: 'Where we deliver' })).toBeVisible();
+  await expect(buyerPage.getByRole('link', { name: 'duties', exact: true })).toHaveAttribute('href', '/tariffs');
+  await shot(buyerPage, 'p7-05-help-article-mobile');
+
+  // ---- The directors' weekly report, sent on demand
+  const director = `director-${run}@e2e.example`;
+  await adminPage.goto('/admin/reports');
+  await adminPage.getByLabel('Name').fill('Pilot Director');
+  await adminPage.getByLabel('Email').fill(director);
+  await adminPage.getByRole('button', { name: 'Add recipient' }).click();
+  await expect(adminPage.getByText(`Pilot Director · ${director}`)).toBeVisible();
+  await adminPage.getByLabel('Week containing').fill(new Date().toISOString().slice(0, 10));
+  await expect(adminPage.getByText('SLU → SVG').first()).toBeVisible();
+  await shot(adminPage, 'p7-06-admin-weekly-report');
+  await adminPage.getByRole('button', { name: 'Send this report now' }).click();
+  await expect(adminPage.getByText(/^Sent to \d+ recipients?\.$/)).toBeVisible();
+  await expect.poll(() => (existsSync(EMAIL_DIR) ? readdirSync(EMAIL_DIR).filter((f) => f.includes(director)).length : 0), { timeout: 15_000 }).toBeGreaterThan(0);
 });
