@@ -643,24 +643,38 @@ conversation, publishing a Help article, and sending the weekly report.
 
 ---
 
-## Phase 8 plan — Launch readiness
+## Phase 8 plan — Pilot review, then launch readiness
+
+### Decisions (2026-09-27)
+
+| Question | Decision |
+|---|---|
+| Payment provider and logistics partner | Added **after the pilot**. The pilot runs on the sandbox payment page (no real money moves through the platform) |
+| Launch date | Set after IIE has **seen the pilot** |
+| Business Solutions | Built **after the pilot** |
+| Support hours | **Monday to Friday, 8:00 am to 5:00 pm** (St. Vincent time), shown on the Contact page, the footer, *Messages* and the Help Center |
 
 ### What will be built
 
-1. **Contracted providers:** the licensed payment provider's adapter (payments, refunds, payouts, webhooks) and the
-   logistics partner onboarding, replacing the sandbox for production; provider reconciliation against settlements.
-2. **Security review:** external penetration test; nonce-based Content-Security-Policy; error monitoring
-   (Sentry/OpenTelemetry); shared rate limiting (Redis) for more than one API instance; S3-compatible storage.
-3. **Operations:** production deployment in St. Vincent, backups with restore drills, uptime alerts, runbooks.
-4. **Admin tools:** CSV exports (transactions, payouts, settlements, disputes); audit log scoped by country.
-5. **Business Solutions** (if IIE decides the scope): business buyer accounts with invoices and PO numbers, bulk listing.
-6. **Pilot launch:** the St. Lucia diaper seller and St. Vincent buyers on production, with real money only after the
-   provider's and IIE's legal sign-off.
+**Stage 1 — Show the pilot (now):**
 
-### Decisions requested before Phase 8
+1. A walkthrough of the whole St. Lucia → St. Vincent pilot, from seller sign-up to the directors' report, for IIE to review.
+2. The pilot site on the St. Vincent staging server (see [`IIE_DEPLOYMENT.md`](IIE_DEPLOYMENT.md)), with the sandbox
+   payment page clearly labelled and IIE staff acting as the logistics partner and customs broker in the partner portal
+   until a partner is contracted.
+3. Changes IIE asks for after seeing it.
 
-- **Payment provider and logistics partner:** which ones are contracted, and their sandbox credentials.
-- **Launch date** and the first sellers and buyers invited.
-- **Business Solutions:** build now or after the pilot?
-- **Support hours** and response times to publish in the Help Center.
+**Stage 2 — Launch readiness (after the pilot):**
 
+1. The contracted payment provider's adapter (payments, refunds, payouts, webhooks) and reconciliation with settlements.
+2. The contracted logistics partner and customs broker invited to the partner portal.
+3. Security review: external penetration test; Content-Security-Policy; error monitoring; shared rate limiting; S3-compatible storage.
+4. Operations: production deployment, backups with restore drills, uptime alerts, runbooks.
+5. Admin tools: CSV exports; audit log scoped by country.
+6. Business Solutions: business buyer accounts (invoices, PO numbers) and bulk listing.
+
+### Decisions requested
+
+- **Money during the pilot:** the platform moves no real money until a provider is contracted. If the pilot involves
+  real goods, how are the seller and the carrier paid (outside the platform), or is the pilot a rehearsal with test orders?
+- **Who from IIE takes part:** staff accounts for customer support, the partner-portal role, and the directors' email list.

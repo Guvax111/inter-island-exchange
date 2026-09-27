@@ -52,9 +52,9 @@ Sign in and open **Messages**, then choose **New message**. If your question is 
 
 If something is wrong with an order you received, use **Report a problem** on the order page instead. That keeps the payment on hold while IIE looks into it. See [Reporting a problem with an order](/help/reporting-a-problem).
 
-## Response times
+## Support hours
 
-[IIE to confirm] We aim to reply within one working day.`,
+IIE's support team works **Monday to Friday, 8:00 am to 5:00 pm** (St. Vincent time), except public holidays. Messages sent outside these hours are answered on the next working day.`,
   },
   {
     slug: 'your-payment-and-protection',

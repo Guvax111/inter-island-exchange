@@ -6,6 +6,7 @@ import { RequireSignIn } from '@/components/account/require-signin';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { CONTACT } from '@/lib/navigation';
 import type { SupportThreadSummary } from '@/lib/types';
 
 export default function MessagesPage() {
@@ -18,7 +19,7 @@ export default function MessagesPage() {
         </Button>
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
-        Your conversations with IIE. Buyers and sellers do not message each other directly: write to IIE and we will help, or pass on what is needed. For a problem with a delivered order, use <strong>Report a problem</strong> on the order page.
+        Your conversations with IIE. Buyers and sellers do not message each other directly: write to IIE and we will help, or pass on what is needed. For a problem with a delivered order, use <strong>Report a problem</strong> on the order page. IIE replies {CONTACT.hours}.
       </p>
       <RequireSignIn>{() => <Threads />}</RequireSignIn>
     </section>

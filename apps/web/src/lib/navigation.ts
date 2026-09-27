@@ -14,6 +14,8 @@ export const CONTACT = {
   email: 'info@interislandexchange.com',
   phone: '(347) 497-3977',
   phoneE164: '+13474973977',
+  /** Support hours, St. Vincent time. */
+  hours: 'Monday to Friday, 8:00 am to 5:00 pm (St. Vincent time)',
 };
 
 export const PRIMARY_NAV: NavItem[] = [

@@ -20,6 +20,7 @@ export function SiteFooter() {
             <p>
               <a href={`tel:${CONTACT.phoneE164}`} className="hover:text-white">{CONTACT.phone}</a>
             </p>
+            <p>Support: {CONTACT.hours}</p>
           </address>
         </div>
         <ul className="grid grid-cols-2 gap-2 text-sm md:col-span-2 md:grid-cols-3">
